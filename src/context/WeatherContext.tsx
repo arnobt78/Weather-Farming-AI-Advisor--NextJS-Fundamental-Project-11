@@ -22,6 +22,7 @@ type WeatherContextValue = {
   setCoordinates: (lat: number, lon: number) => void;
   currentWeather: WeatherApiSuccess | null;
   setCurrentWeather: (data: WeatherApiSuccess | null) => void;
+  weatherDescription: string;
   savedCities: string[];
   addSavedCity: (city: string) => void;
   removeSavedCity: (city: string) => void;
@@ -35,7 +36,11 @@ const MAX_SAVED = 10;
 
 const WeatherContext = createContext<WeatherContextValue | null>(null);
 
-function loadStored(): { city: string; lat: number | null; lon: number | null } {
+function loadStored(): {
+  city: string;
+  lat: number | null;
+  lon: number | null;
+} {
   if (typeof window === "undefined") {
     return { city: DEFAULT_CITY, lat: null, lon: null };
   }
@@ -45,7 +50,11 @@ function loadStored(): { city: string; lat: number | null; lon: number | null } 
     const lonS = localStorage.getItem(STORAGE_LON);
     const lat = latS != null ? Number(latS) : null;
     const lon = lonS != null ? Number(lonS) : null;
-    return { city, lat: Number.isFinite(lat) ? lat : null, lon: Number.isFinite(lon) ? lon : null };
+    return {
+      city,
+      lat: Number.isFinite(lat) ? lat : null,
+      lon: Number.isFinite(lon) ? lon : null,
+    };
   } catch {
     return { city: DEFAULT_CITY, lat: null, lon: null };
   }
@@ -65,7 +74,8 @@ export function WeatherProvider({
   const [city, setCityState] = useState(initialCity);
   const [lat, setLat] = useState<number | null>(() => loadStored().lat);
   const [lon, setLon] = useState<number | null>(() => loadStored().lon);
-  const [currentWeather, setCurrentWeather] = useState<WeatherApiSuccess | null>(null);
+  const [currentWeather, setCurrentWeather] =
+    useState<WeatherApiSuccess | null>(null);
   const [savedCities, setSavedCities] = useState<string[]>(initialSavedCities);
 
   const setCity = useCallback((c: string) => {
@@ -97,7 +107,10 @@ export function WeatherProvider({
     const trimmed = c.trim();
     if (!trimmed) return;
     setSavedCities((prev) => {
-      const next = [trimmed, ...prev.filter((x) => x !== trimmed)].slice(0, MAX_SAVED);
+      const next = [trimmed, ...prev.filter((x) => x !== trimmed)].slice(
+        0,
+        MAX_SAVED,
+      );
       try {
         if (typeof window !== "undefined") {
           localStorage.setItem(STORAGE_SAVED, JSON.stringify(next));
@@ -133,15 +146,14 @@ export function WeatherProvider({
     setCoordinates,
     currentWeather,
     setCurrentWeather,
+    weatherDescription: currentWeather?.weather[0]?.description ?? "",
     savedCities,
     addSavedCity,
     removeSavedCity,
   };
 
   return (
-    <WeatherContext.Provider value={value}>
-      {children}
-    </WeatherContext.Provider>
+    <WeatherContext.Provider value={value}>{children}</WeatherContext.Provider>
   );
 }
 

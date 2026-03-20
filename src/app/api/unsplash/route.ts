@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   const keyword = request.nextUrl.searchParams.get("keyword") ?? "weather";
-  const photos = await searchUnsplash(keyword, 9);
-  return NextResponse.json({ photos });
+  const page = Math.max(
+    1,
+    Number(request.nextUrl.searchParams.get("page") ?? "1") || 1,
+  );
+  const result = await searchUnsplash(keyword, 9, page);
+  return NextResponse.json(result);
 }

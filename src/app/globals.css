@@ -28,6 +28,11 @@ body {
   border-radius: 0.5rem;
 }
 
+.cta-shine-button {
+  position: relative;
+  z-index: 2;
+}
+
 /* Primary shine band */
 .cta-shine-wrap::after {
   content: "";
@@ -54,6 +59,7 @@ body {
   transform: translateX(-120%) skewX(-5deg);
   animation: cta-shine 8s cubic-bezier(0.25, 0, 0.15, 1) infinite;
   pointer-events: none;
+  z-index: 1;
 }
 
 /* Secondary trailing glow */
@@ -160,6 +166,24 @@ body {
     transform: translateY(100px) translateX(20px) rotate(360deg);
     opacity: 0;
   }
+}
+
+@keyframes ai-cursor-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.ai-streaming-cursor::after {
+  content: "▋";
+  display: inline;
+  animation: ai-cursor-blink 0.8s step-end infinite;
+  color: rgba(255, 255, 255, 0.8);
+  margin-left: 1px;
 }
 
 .scrollbar-hide {

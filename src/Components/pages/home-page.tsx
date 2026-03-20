@@ -26,6 +26,7 @@ import {
   Globe,
   Info,
   Leaf,
+  Loader2,
   MapPin,
   MousePointerClick,
   Sparkles,
@@ -33,6 +34,8 @@ import {
   Sunset,
   Thermometer,
   ThermometerSun,
+  Volume2,
+  VolumeX,
   Wind,
 } from "lucide-react";
 import Image from "next/image";
@@ -46,6 +49,39 @@ type HomePageProps = {
 };
 
 /* ─── helpers ────────────────────────────────────────────── */
+
+/** Render AI text with basic markdown formatting (bold, bullets, newlines) */
+function renderAiText(text: string, isStreaming: boolean) {
+  const lines = text.split("\n");
+  return (
+    <span>
+      {lines.map((line, li) => {
+        const trimmed = line.trim();
+        const isBullet = /^[-•*]\s/.test(trimmed);
+        const content = isBullet ? trimmed.slice(2) : trimmed;
+        const parts = content.split(/(\*\*[^*]+\*\*)/g);
+        const rendered = parts.map((part, pi) => {
+          if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+              <strong key={pi} className="font-semibold text-white">
+                {part.slice(2, -2)}
+              </strong>
+            );
+          }
+          return <span key={pi}>{part}</span>;
+        });
+        return (
+          <span key={li}>
+            {li > 0 && <br />}
+            {isBullet && <span className="mr-1">•</span>}
+            {rendered}
+          </span>
+        );
+      })}
+      {isStreaming && <span className="ai-streaming-cursor" />}
+    </span>
+  );
+}
 
 function formatDate(date: Date): string {
   const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -254,13 +290,18 @@ export function HomePage({ initialData }: HomePageProps) {
 
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryStreaming, setSummaryStreaming] = useState(false);
   const [tips, setTips] = useState<string | null>(null);
   const [tipsLoading, setTipsLoading] = useState(false);
+  const [tipsStreaming, setTipsStreaming] = useState(false);
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [air, setAir] = useState<AirPollutionResponse | null>(null);
   const [airLoading, setAirLoading] = useState(false);
   const [lastAiCityKey, setLastAiCityKey] = useState<string | null>(null);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const onSuccess = useCallback(
     (data: WeatherApiSuccess, city: string) => {
@@ -296,6 +337,7 @@ export function HomePage({ initialData }: HomePageProps) {
     if (state.status !== "ready") return;
     setSummaryLoading(true);
     setSummary(null);
+    setSummaryStreaming(false);
     try {
       const res = await fetch("/api/ai/summary", {
         method: "POST",
@@ -312,10 +354,26 @@ export function HomePage({ initialData }: HomePageProps) {
         }),
       });
       if (!res.ok) return;
-      const data = (await res.json()) as { text: string };
-      setSummary(data.text);
+      const ct = res.headers.get("content-type") ?? "";
+      if (ct.includes("text/plain") && res.body) {
+        setSummaryStreaming(true);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          accumulated += decoder.decode(value, { stream: true });
+          setSummary(accumulated);
+        }
+        setSummaryStreaming(false);
+      } else {
+        const data = (await res.json()) as { text: string };
+        setSummary(data.text);
+      }
     } finally {
       setSummaryLoading(false);
+      setSummaryStreaming(false);
     }
   }, [state]);
 
@@ -323,6 +381,7 @@ export function HomePage({ initialData }: HomePageProps) {
     if (state.status !== "ready") return;
     setTipsLoading(true);
     setTips(null);
+    setTipsStreaming(false);
     try {
       const res = await fetch("/api/ai/farming-tips", {
         method: "POST",
@@ -335,16 +394,96 @@ export function HomePage({ initialData }: HomePageProps) {
             wind: state.data.wind.speed,
             main: state.data.weather[0]?.main ?? "",
             description: state.data.weather[0]?.description ?? "",
+            pressure: state.data.main.pressure,
+            visibility: state.data.visibility,
           },
+          airQuality: air?.list[0]
+            ? {
+                aqi: air.list[0].main.aqi,
+                pm2_5: air.list[0].components.pm2_5,
+                pm10: air.list[0].components.pm10,
+                o3: air.list[0].components.o3,
+                no2: air.list[0].components.no2,
+                so2: air.list[0].components.so2,
+                co: air.list[0].components.co,
+              }
+            : null,
+          forecast: forecast?.list
+            ? forecast.list.slice(0, 5).map((f) => ({
+                date: f.dt_txt,
+                temp: Math.round(f.main.temp),
+                humidity: f.main.humidity,
+                description: f.weather[0]?.description ?? "",
+              }))
+            : null,
+          geo: state.data.coord
+            ? {
+                country: state.data.sys?.country,
+                lat: state.data.coord.lat,
+                lon: state.data.coord.lon,
+              }
+            : null,
         }),
       });
       if (!res.ok) return;
-      const data = (await res.json()) as { text: string };
-      setTips(data.text);
+      const ct = res.headers.get("content-type") ?? "";
+      if (ct.includes("text/plain") && res.body) {
+        setTipsStreaming(true);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          accumulated += decoder.decode(value, { stream: true });
+          setTips(accumulated);
+        }
+        setTipsStreaming(false);
+      } else {
+        const data = (await res.json()) as { text: string };
+        setTips(data.text);
+      }
     } finally {
       setTipsLoading(false);
+      setTipsStreaming(false);
     }
-  }, [state]);
+  }, [state, air, forecast]);
+
+  const handleTTS = useCallback(async () => {
+    if (ttsPlaying && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setTtsPlaying(false);
+      return;
+    }
+    const text = [summary, tips].filter(Boolean).join("\n\n");
+    if (!text) return;
+    setTtsLoading(true);
+    try {
+      const res = await fetch("/api/ai/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => {
+        setTtsPlaying(false);
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => {
+        setTtsPlaying(false);
+        URL.revokeObjectURL(url);
+      };
+      await audio.play();
+      setTtsPlaying(true);
+    } finally {
+      setTtsLoading(false);
+    }
+  }, [summary, tips, ttsPlaying]);
 
   const fetchForecast = useCallback(async () => {
     if (lat == null || lon == null) return;
@@ -799,8 +938,8 @@ export function HomePage({ initialData }: HomePageProps) {
                         disabled={summaryLoading}
                         className="cta-shine-button rounded-lg border border-sky-300/50 bg-gradient-to-r from-sky-500/35 via-sky-500/20 to-sky-500/10 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(2,132,199,0.3)] backdrop-blur-sm transition hover:border-sky-200/60 hover:from-sky-500/45 hover:via-sky-500/25 hover:to-sky-500/15"
                       >
-                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap leading-none">
-                          <CloudCog className="h-4 w-4" />
+                        <CloudCog className="h-4 w-4 shrink-0" />
+                        <span className="whitespace-nowrap">
                           {summaryLoading
                             ? "Generating Summary..."
                             : "AI Weather Summary"}
@@ -814,18 +953,41 @@ export function HomePage({ initialData }: HomePageProps) {
                         disabled={tipsLoading}
                         className="cta-shine-button rounded-lg border border-emerald-300/50 bg-gradient-to-r from-emerald-500/35 via-emerald-500/20 to-emerald-500/10 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(16,185,129,0.28)] backdrop-blur-sm transition hover:border-emerald-200/60 hover:from-emerald-500/45 hover:via-emerald-500/25 hover:to-emerald-500/15"
                       >
-                        <span className="inline-flex items-center gap-1.5 whitespace-nowrap leading-none">
-                          <Leaf className="h-4 w-4" />
+                        <Leaf className="h-4 w-4 shrink-0" />
+                        <span className="whitespace-nowrap">
                           {tipsLoading
                             ? "Generating Tips..."
                             : "AI Farming Tips"}
                         </span>
                       </RippleButton>
                     </div>
+                    <div className="cta-shine-wrap rounded-lg">
+                      <RippleButton
+                        type="button"
+                        onClick={() => void handleTTS()}
+                        disabled={ttsLoading || (!summary && !tips)}
+                        className="cta-shine-button rounded-lg border border-violet-300/50 bg-gradient-to-r from-violet-500/35 via-violet-500/20 to-violet-500/10 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(139,92,246,0.28)] backdrop-blur-sm transition hover:border-violet-200/60 hover:from-violet-500/45 hover:via-violet-500/25 hover:to-violet-500/15"
+                      >
+                        {ttsLoading ? (
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                        ) : ttsPlaying ? (
+                          <VolumeX className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <Volume2 className="h-4 w-4 shrink-0" />
+                        )}
+                        <span className="whitespace-nowrap">
+                          {ttsLoading
+                            ? "Loading Audio..."
+                            : ttsPlaying
+                              ? "Stop Reading"
+                              : "AI Voice Reader"}
+                        </span>
+                      </RippleButton>
+                    </div>
                   </div>
                 </div>
                 {!summary && !tips && (
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     <p className="inline-flex items-start gap-2 rounded-xl border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-white/90">
                       <CloudCog className="mt-0.5 h-4 w-4 shrink-0 text-sky-200" />
                       Click{" "}
@@ -842,6 +1004,14 @@ export function HomePage({ initialData }: HomePageProps) {
                       </span>{" "}
                       for crop-friendly guidance.
                     </p>
+                    <p className="inline-flex items-start gap-2 rounded-xl border border-violet-300/20 bg-violet-500/10 p-3 text-sm text-white/90">
+                      <Volume2 className="mt-0.5 h-4 w-4 shrink-0 text-violet-200" />
+                      Click{" "}
+                      <span className="font-semibold text-white">
+                        AI Voice Reader
+                      </span>{" "}
+                      to listen to AI insights aloud.
+                    </p>
                   </div>
                 )}
                 <AnimatePresence>
@@ -852,9 +1022,9 @@ export function HomePage({ initialData }: HomePageProps) {
                       exit={{ opacity: 0, height: 0 }}
                       className="overflow-hidden"
                     >
-                      <p className="mt-3 rounded-xl border border-sky-300/20 bg-sky-500/10 p-4 text-sm leading-relaxed text-white/90">
-                        {summary}
-                      </p>
+                      <div className="mt-3 rounded-xl border border-sky-300/20 bg-sky-500/10 p-4 text-sm leading-relaxed text-white/90">
+                        {renderAiText(summary, summaryStreaming)}
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -866,9 +1036,9 @@ export function HomePage({ initialData }: HomePageProps) {
                       exit={{ opacity: 0, height: 0 }}
                       className="overflow-hidden"
                     >
-                      <p className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-relaxed text-white/90">
-                        {tips}
-                      </p>
+                      <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-relaxed text-white/90">
+                        {renderAiText(tips, tipsStreaming)}
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>

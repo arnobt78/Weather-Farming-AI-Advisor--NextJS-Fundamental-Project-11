@@ -108,10 +108,8 @@ export function Navbar() {
                 onClick={submitSearch}
                 className="cta-shine-button shrink-0 rounded-lg border border-sky-300/50 bg-gradient-to-r from-sky-500/35 via-sky-500/20 to-sky-500/10 px-3 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(2,132,199,0.3)] backdrop-blur-sm transition hover:border-sky-200/60 hover:from-sky-500/45 hover:via-sky-500/25 hover:to-sky-500/15"
               >
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap leading-none">
-                  <MapPinCheck className="h-4 w-4" />
-                  Search City
-                </span>
+                <MapPinCheck className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap">Search City</span>
               </RippleButton>
             </div>
           </div>
@@ -152,10 +150,8 @@ export function Navbar() {
                   onClick={submitSearch}
                   className="rounded-lg border border-sky-300/50 bg-gradient-to-r from-sky-500/35 via-sky-500/20 to-sky-500/10 px-3 py-2 text-sm font-medium text-white shadow-[0_10px_30px_rgba(2,132,199,0.3)] backdrop-blur-sm transition hover:border-sky-200/60 hover:from-sky-500/45 hover:via-sky-500/25 hover:to-sky-500/15"
                 >
-                  <span className="inline-flex items-center gap-1.5 whitespace-nowrap leading-none">
-                    <MapPinCheck className="h-4 w-4" />
-                    Search City
-                  </span>
+                  <MapPinCheck className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">Search City</span>
                 </RippleButton>
               </div>
               {savedCitiesRow}

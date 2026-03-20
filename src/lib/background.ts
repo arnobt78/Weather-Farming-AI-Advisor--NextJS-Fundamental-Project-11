@@ -7,8 +7,8 @@ import { searchUnsplash } from "@/lib/unsplash";
  */
 const getCachedBackgroundUrl = unstable_cache(
   async (query: string) => {
-    const photos = await searchUnsplash(query, 1);
-    return photos[0]?.urls?.regular ?? null;
+    const result = await searchUnsplash(query, 1);
+    return result.photos[0]?.urls?.regular ?? null;
   },
   ["initial-background-url"],
   { revalidate: 300 },
