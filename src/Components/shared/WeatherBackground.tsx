@@ -3,7 +3,7 @@
 import { useWeatherContext } from "@/context/WeatherContext";
 import { BG_IMAGE_COOKIE_KEY, WEATHER_UNSPLASH_QUERY } from "@/data/constants";
 import type { UnsplashPhoto } from "@/types/unsplash";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const SLIDE_INTERVAL_MS = 9000;
 
@@ -22,7 +22,12 @@ export function WeatherBackground({
   );
   const [photos, setPhotos] = useState<UnsplashPhoto[]>([]);
   const [index, setIndex] = useState(0);
-  const [displayUrl, setDisplayUrl] = useState<string | null>(initialImageUrl);
+
+  // Two-layer crossfade: layerA and layerB alternate as active/inactive
+  const [layerA, setLayerA] = useState<string | null>(initialImageUrl);
+  const [layerB, setLayerB] = useState<string | null>(null);
+  const [activeLayer, setActiveLayer] = useState<"a" | "b">("a");
+  const activeLayerRef = useRef<"a" | "b">("a");
 
   useEffect(() => {
     let cancelled = false;
@@ -61,32 +66,48 @@ export function WeatherBackground({
     const img = new window.Image();
     img.src = activeUrl;
     img.onload = () => {
-      setDisplayUrl(activeUrl);
+      // Load new image into the inactive layer, then flip active
+      if (activeLayerRef.current === "a") {
+        setLayerB(activeUrl);
+        setActiveLayer("b");
+        activeLayerRef.current = "b";
+      } else {
+        setLayerA(activeUrl);
+        setActiveLayer("a");
+        activeLayerRef.current = "a";
+      }
+      // Persist for cross-route consistency
+      try {
+        document.cookie = `${BG_IMAGE_COOKIE_KEY}=${encodeURIComponent(activeUrl)}; path=/; max-age=86400; samesite=lax`;
+      } catch {
+        // ignore
+      }
     };
   }, [activeUrl]);
 
-  // Persist the active URL in a cookie so layout can pass it as initialImageUrl
-  // on every route — prevents flash/mismatch when navigating between pages.
-  useEffect(() => {
-    if (!displayUrl) return;
-    try {
-      document.cookie = `${BG_IMAGE_COOKIE_KEY}=${encodeURIComponent(displayUrl)}; path=/; max-age=86400; samesite=lax`;
-    } catch {
-      // ignore
-    }
-  }, [displayUrl]);
-
   return (
     <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),transparent_55%),radial-gradient(circle_at_bottom,_rgba(236,72,153,0.1),transparent_65%)]" />
-      {displayUrl ? (
+      {/* Layer A */}
+      {layerA && (
         <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${displayUrl})` }}
+          className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${
+            activeLayer === "a" ? "opacity-100" : "opacity-0"
+          }`}
+          style={{ backgroundImage: `url(${layerA})` }}
         />
-      ) : null}
+      )}
+      {/* Layer B */}
+      {layerB && (
+        <div
+          className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${
+            activeLayer === "b" ? "opacity-100" : "opacity-0"
+          }`}
+          style={{ backgroundImage: `url(${layerB})` }}
+        />
+      )}
+      {/* Overlays always on top */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.12),transparent_55%),radial-gradient(circle_at_bottom,_rgba(236,72,153,0.1),transparent_65%)]" />
       <div className="absolute inset-0 bg-slate-950/18" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.03),transparent_60%)]" />
     </div>
   );
 }

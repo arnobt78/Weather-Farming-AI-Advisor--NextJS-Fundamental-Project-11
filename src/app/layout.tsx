@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 import "./globals.css";
 import { Navbar } from "@/Components/shared/Navbar";
+import { Footer } from "@/Components/shared/Footer";
 import { BackgroundPreload } from "@/Components/shared/background-preload";
 import { WeatherBackground } from "@/Components/shared/WeatherBackground";
 import { WeatherProvider } from "@/context/WeatherContext";
@@ -82,6 +83,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
               <div className="mx-auto flex min-h-screen w-full max-w-9xl flex-1 flex-col px-4 pb-8 sm:px-6">
                 {children}
               </div>
+              <Footer />
             </div>
           </WeatherProvider>
         </AppProvider>

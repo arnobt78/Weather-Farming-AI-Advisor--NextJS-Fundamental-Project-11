@@ -2,7 +2,7 @@
 
 A fast, minimal, and modern weather web application built with React and Vite. It lets users search any city in the world and view up-to-date weather details including temperature, humidity, and wind information using the [OpenWeather API](https://openweathermap.org/). Designed for learning and demonstration, this project is ideal for beginners and intermediates who want to understand how to build and deploy a real-world React app with API integration and Vercel deployment.
 
-- **Live-Demo:** [https://weather-instant.vercel.app/](https://weather-instant.vercel.app/)
+- **Live-Demo:** [https://weather-farming.vercel.app/](https://weather-farming.vercel.app/)
 
 ---
 
