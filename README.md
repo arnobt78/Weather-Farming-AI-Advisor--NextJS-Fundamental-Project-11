@@ -1,14 +1,8 @@
-# Weather Live - ReactVite Web Application
+# Weather Live - Next.js, React, TypeScript,OpenWeather API, TailwindCSS, Framer Motion Fundamental Project 11
 
-![Screenshot 2024-09-27 at 15 40 36](https://github.com/user-attachments/assets/c1ab3e86-b62f-4b61-8a1f-7ef3feb74c54) ![Screenshot 2024-09-27 at 15 42 03](https://github.com/user-attachments/assets/fbc53aa5-25e9-44c2-a018-f27dc9e4c763) ![Screenshot 2024-09-27 at 15 41 23](https://github.com/user-attachments/assets/e58c3b84-dde1-4d33-a4ca-0e3bd0b5a315)
+A fast, minimal, and modern weather web application built with React and Vite. It lets users search any city in the world and view up-to-date weather details including temperature, humidity, and wind information using the [OpenWeather API](https://openweathermap.org/). Designed for learning and demonstration, this project is ideal for beginners and intermediates who want to understand how to build and deploy a real-world React app with API integration and Vercel deployment.
 
----
-
-## Project Summary
-
-**Weather-ReactVite** is a fast, minimal, and modern weather web application built with React and Vite. It lets users search any city in the world and view up-to-date weather details including temperature, humidity, and wind information using the [OpenWeather API](https://openweathermap.org/). Designed for learning and demonstration, this project is ideal for beginners and intermediates who want to understand how to build and deploy a real-world React app with API integration and Vercel deployment.
-
-- **Live-Demo:** [https://weather-arnob.vercel.app/](https://weather-arnob.vercel.app/)
+- **Live-Demo:** [https://weather-instant.vercel.app/](https://weather-instant.vercel.app/)
 
 ---
 
@@ -16,15 +10,14 @@
 
 1. [Project Summary](#project-summary)
 2. [Features](#features)
-3. [Live Demo](#live-demo)
-4. [Technology Stack](#technology-stack)
-5. [Project Structure](#project-structure)
-6. [Installation & Setup](#installation--setup)
-7. [How It Works](#how-it-works)
-8. [API Integration](#api-integration)
-9. [Usage Examples](#usage-examples)
-10. [Learning Points](#learning-points)
-11. [Conclusion](#conclusion)
+3. [Technology Stack](#technology-stack)
+4. [Project Structure](#project-structure)
+5. [Installation & Setup](#installation--setup)
+6. [How It Works](#how-it-works)
+7. [API Integration](#api-integration)
+8. [Usage Examples](#usage-examples)
+9. [Learning Points](#learning-points)
+10. [Conclusion](#conclusion)
 
 ---
 
@@ -52,7 +45,7 @@
 
 ## Project Structure
 
-```
+```bash
 Weather--ReactVite/
 │
 ├── .eslintrc.cjs        # Linting configuration
@@ -97,23 +90,31 @@ cd Weather--ReactVite
 ```bash
 npm install
 ```
+
 This installs all required packages from `package.json`.
 
 ---
 
-### 4. Get OpenWeather API Key
+### 4. Environment variables
+
+Copy `.env.example` to `.env.local` and add your API keys. Do not commit `.env.local` or any file containing real keys.
+
+---
+
+### 5. Get OpenWeather API Key
 
 - Register for free at [OpenWeather](https://openweathermap.org/).
 - Get your API key from your dashboard.
 
 ---
 
-### 5. Run the App Locally
+### 6. Run the App Locally
 
 ```bash
 npm run dev
 ```
-Visit [http://localhost:5173/](http://localhost:5173/) in your browser.
+
+Visit [http://localhost:3000/](http://localhost:3000/) in your browser (Next.js default).
 
 ---
 
@@ -137,8 +138,8 @@ const apiKey = "YOUR_API_KEY";
 const url = `https://api.openweathermap.org/data/2.5/weather?q=London&appid=${apiKey}&units=metric`;
 
 fetch(url)
-  .then(response => response.json())
-  .then(data => {
+  .then((response) => response.json())
+  .then((data) => {
     // Use data.main.temp, data.weather[0].description, etc.
   });
 ```
@@ -151,6 +152,8 @@ fetch(url)
 
 ```jsx
 async function fetchWeather(city) {
+  const response = await fetch(
+    `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=YOUR_API_KEY&units=metric`,
   const response = await fetch(
     `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=YOUR_API_KEY&units=metric`
   );

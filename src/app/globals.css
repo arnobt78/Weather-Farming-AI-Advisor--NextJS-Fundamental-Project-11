@@ -1,0 +1,171 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: transparent;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: transparent;
+}
+
+/* CTA shine / splashing button effect – sword-like glossy sweep */
+.cta-shine-wrap {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  border-radius: 9999px;
+}
+
+.cta-shine-wrap.rounded-lg {
+  border-radius: 0.5rem;
+}
+
+/* Primary shine band */
+.cta-shine-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 38%,
+    rgba(255, 255, 255, 0.08) 42%,
+    rgba(255, 255, 255, 0.18) 45%,
+    rgba(255, 255, 255, 0.45) 48%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.45) 52%,
+    rgba(255, 255, 255, 0.18) 55%,
+    rgba(255, 255, 255, 0.08) 58%,
+    transparent 62%,
+    transparent 100%
+  );
+  filter: blur(0.5px);
+  transform: translateX(-120%) skewX(-5deg);
+  animation: cta-shine 8s cubic-bezier(0.25, 0, 0.15, 1) infinite;
+  pointer-events: none;
+}
+
+/* Secondary trailing glow */
+.cta-shine-wrap::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 40%,
+    rgba(255, 255, 255, 0.06) 48%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 52%,
+    transparent 60%,
+    transparent 100%
+  );
+  transform: translateX(-120%) skewX(-5deg);
+  animation: cta-shine-trail 8s cubic-bezier(0.25, 0, 0.15, 1) infinite;
+  animation-delay: 0.3s;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes cta-shine {
+  0%,
+  12% {
+    transform: translateX(-120%) skewX(-5deg);
+  }
+  55% {
+    transform: translateX(250%) skewX(-5deg);
+  }
+  100% {
+    transform: translateX(250%) skewX(-5deg);
+  }
+}
+
+@keyframes cta-shine-trail {
+  0%,
+  15% {
+    transform: translateX(-120%) skewX(-5deg);
+  }
+  58% {
+    transform: translateX(250%) skewX(-5deg);
+  }
+  100% {
+    transform: translateX(250%) skewX(-5deg);
+  }
+}
+
+/* Weather particle effects */
+@keyframes float-particle {
+  0%,
+  100% {
+    transform: translateY(0) translateX(0);
+  }
+  25% {
+    transform: translateY(-8px) translateX(4px);
+  }
+  50% {
+    transform: translateY(-4px) translateX(-3px);
+  }
+  75% {
+    transform: translateY(-10px) translateX(2px);
+  }
+}
+
+@keyframes sun-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px 8px rgba(251, 191, 36, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px 16px rgba(251, 191, 36, 0.15);
+  }
+}
+
+@keyframes rain-fall {
+  0% {
+    transform: translateY(-10px) scaleY(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(120px) scaleY(1.5);
+    opacity: 0;
+  }
+}
+
+@keyframes snow-drift {
+  0% {
+    transform: translateY(-10px) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(100px) translateX(20px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
