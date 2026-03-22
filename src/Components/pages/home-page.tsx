@@ -47,7 +47,7 @@ import {
   VolumeX,
   Wind,
 } from "lucide-react";
-import Image from "next/image";
+import { SafeImage } from "@/Components/ui/safe-image";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -109,6 +109,25 @@ function formatDate(date: Date): string {
     "Dec",
   ];
   return `${daysOfWeek[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]}`;
+}
+
+function formatDateUtc(date: Date): string {
+  const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return `${daysOfWeek[date.getUTCDay()]}, ${date.getUTCDate()} ${months[date.getUTCMonth()]}`;
 }
 
 function formatTime(date: Date): string {
@@ -649,7 +668,10 @@ export function HomePage({ initialData }: HomePageProps) {
                     {state.data.weather[0]?.description}
                   </p>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/90">
-                    <span className="inline-flex items-center gap-1">
+                    <span
+                      className="inline-flex items-center gap-1"
+                      suppressHydrationWarning
+                    >
                       <CalendarClock className="h-3.5 w-3.5" />
                       {localTime}, {localDate}
                     </span>
@@ -702,7 +724,7 @@ export function HomePage({ initialData }: HomePageProps) {
                       Weather Status
                     </p>
                     <div className="relative">
-                      <Image
+                      <SafeImage
                         src={weatherIconSrc}
                         alt={weatherKind}
                         width={80}
@@ -1104,7 +1126,7 @@ export function HomePage({ initialData }: HomePageProps) {
                             className="rounded-2xl border border-white/15 bg-white/5 p-3 backdrop-blur-sm transition-colors hover:bg-white/10"
                           >
                             <div className="flex items-center gap-3">
-                              <Image
+                              <SafeImage
                                 src={itemIconSrc}
                                 alt={itemWeatherKind}
                                 width={36}
@@ -1113,7 +1135,7 @@ export function HomePage({ initialData }: HomePageProps) {
                               />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-white/90">
-                                  {formatDate(new Date(item.dt_txt))}
+                                  {formatDateUtc(new Date(item.dt * 1000))}
                                 </p>
                                 <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-white/90">
                                   <span className="inline-flex items-center gap-1">

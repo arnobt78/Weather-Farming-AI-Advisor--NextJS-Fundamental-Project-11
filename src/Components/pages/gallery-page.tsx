@@ -14,7 +14,7 @@ import { WEATHER_GIFS } from "@/data/constants";
 import type { UnsplashPhoto } from "@/types/unsplash";
 import { AnimatePresence, motion } from "framer-motion";
 import { Download, ImageIcon, Sparkles } from "lucide-react";
-import Image from "next/image";
+import { SafeImage } from "@/Components/ui/safe-image";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function GalleryPage() {
@@ -145,7 +145,7 @@ export function GalleryPage() {
                     className="relative aspect-[4/3] cursor-pointer overflow-hidden"
                     onClick={() => setDialogPhoto(photo)}
                   >
-                    <Image
+                    <SafeImage
                       src={photo.urls.regular}
                       alt={photo.alt_description ?? "Weather photo"}
                       fill
