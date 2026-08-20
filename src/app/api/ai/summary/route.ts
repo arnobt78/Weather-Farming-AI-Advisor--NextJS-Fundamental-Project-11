@@ -6,28 +6,27 @@
  */
 import { generateWithAI } from "@/lib/ai";
 import { generateWithAIStream } from "@/lib/ai-stream";
+import { enforceAiRateLimit } from "@/lib/ai-rate-limit";
+import { validateSummaryBody } from "@/lib/ai-validate";
 import { NextRequest, NextResponse } from "next/server";
 
-type Body = {
-  city: string;
-  weather: {
-    temp: number;
-    humidity: number;
-    wind: number;
-    main: string;
-    description: string;
-  };
-};
-
 export async function POST(request: NextRequest) {
-  let body: Body;
+  const limited = enforceAiRateLimit(request);
+  if (limited) return limited;
+
+  let raw: unknown;
   try {
-    body = (await request.json()) as Body;
+    raw = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { city, weather } = body;
+  const parsed = validateSummaryBody(raw);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  }
+
+  const { city, weather } = parsed;
   const prompt = `In 2 to 3 short sentences, summarize the weather in ${city}: ${weather.main}, ${weather.description}, ${weather.temp}°C, humidity ${weather.humidity}%, wind ${weather.wind} km/h. Add one brief suggestion on what to wear or carry. Keep it friendly and concise.`;
 
   const stream = await generateWithAIStream(prompt);

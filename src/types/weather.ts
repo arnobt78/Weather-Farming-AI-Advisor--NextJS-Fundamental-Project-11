@@ -38,5 +38,5 @@ export type WeatherApiError = {
 
 export type WeatherState =
   | { status: "loading"; data: null; notFound: false }
-  | { status: "error"; data: null; notFound: true }
+  | { status: "error"; data: null; notFound: true; message: string }
   | { status: "ready"; data: WeatherApiSuccess; notFound: false };

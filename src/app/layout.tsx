@@ -5,8 +5,9 @@
  * - Defines global `metadata` for SEO (title template, Open Graph, Twitter, author).
  * - Loads Google fonts as CSS variables for the whole app.
  * - Reads HTTP cookies on the server to hydrate `WeatherProvider` without navbar hydration mismatches.
+ * - `data-scroll-behavior="smooth"` on `<html>` is the App Router scroll hint (no JS delay).
  * - Mounts shell: AppProvider → WeatherProvider → preload + fixed background → Navbar → page `children` → Footer.
- * - `BackgroundPreload` / `WeatherBackground` use `BG_IMAGE_COOKIE_KEY` so revisits keep the same Unsplash image.
+ * - `BackgroundPreload` / `WeatherBackground`: cookie URL wins; otherwise SSR Unsplash via `getInitialBackgroundUrl`.
  */
 import type { Metadata } from "next";
 import { DM_Sans, Lilita_One } from "next/font/google";
@@ -21,9 +22,12 @@ import { WeatherProvider } from "@/context/WeatherContext";
 import {
   BG_IMAGE_COOKIE_KEY,
   CITY_COOKIE_KEY,
+  DEFAULT_CITY,
   SAVED_CITIES_COOKIE_KEY,
 } from "@/data/constants";
 import { AppProvider } from "@/provider/app-provider";
+import { getInitialBackgroundUrl } from "@/lib/background";
+import { fetchWeatherByCity } from "@/lib/openweather";
 
 const fontDisplay = Lilita_One({
   subsets: ["latin"],
@@ -147,9 +151,20 @@ export default async function RootLayout({ children }: RootLayoutProps) {
   const savedRaw = cookieStore.get(SAVED_CITIES_COOKIE_KEY)?.value;
   // Background URL saved client-side after the first load — ensures every route
   // (home, gallery, etc.) starts with the same image the user last saw.
-  const initialBgUrl = cookieStore.get(BG_IMAGE_COOKIE_KEY)?.value
+  // Cookie from a previous visit wins. First visit: weather-matched Unsplash (cached 300s).
+  let initialBgUrl = cookieStore.get(BG_IMAGE_COOKIE_KEY)?.value
     ? decodeURIComponent(cookieStore.get(BG_IMAGE_COOKIE_KEY)!.value)
     : null;
+  if (!initialBgUrl) {
+    try {
+      const cityForBg = initialCity?.trim() || DEFAULT_CITY;
+      const weather = await fetchWeatherByCity(cityForBg);
+      const main = weather?.weather[0]?.main ?? null;
+      initialBgUrl = await getInitialBackgroundUrl(main);
+    } catch {
+      initialBgUrl = null;
+    }
+  }
   let initialSavedCities: string[] = [];
   if (savedRaw) {
     try {
@@ -163,7 +178,7 @@ export default async function RootLayout({ children }: RootLayoutProps) {
   }
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={`${fontBody.variable} ${fontDisplay.variable} min-h-screen bg-transparent font-sans antialiased`}

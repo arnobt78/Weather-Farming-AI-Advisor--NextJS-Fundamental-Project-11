@@ -2,28 +2,54 @@
  * lib/ai-stream.ts — streaming AI text (SSE / chunked bodies)
  *
  * Walkthrough:
- * - Gemini uses `streamGenerateContent` + SSE lines (`data: {...}`); we re-emit plain UTF-8 chunks.
- * - Groq/OpenRouter use OpenAI-style SSE with `choices[0].delta.content` — `parseOpenAISSE` normalizes both.
- * - Consumers (e.g. `/api/ai/summary`) return `Response(stream)` with `text/plain` for progressive UI.
+ * - Gemini uses `streamGenerateContent` + SSE; we re-emit plain UTF-8 chunks.
+ * - Groq / OpenRouter / Hugging Face use OpenAI-style SSE (`choices[0].delta.content`).
+ * - Model IDs match `ai-providers.ts` (same chain as JSON `ai.ts`).
+ * - 429 skips remaining models on that provider.
  */
+
+import {
+  AI_MAX_TOKENS,
+  AI_TEMPERATURE,
+  GEMINI_MODELS,
+  GROQ_CHAT_URL,
+  GROQ_MODELS,
+  HUGGINGFACE_CHAT_URL,
+  HUGGINGFACE_MODELS,
+  OPENROUTER_CHAT_URL,
+  OPENROUTER_MODELS,
+  geminiStreamUrl,
+  getHuggingFaceKey,
+  skipRemainingModels,
+  tryModelChain,
+} from "@/lib/ai-providers";
 
 async function tryGeminiStream(
   prompt: string,
 ): Promise<ReadableStream<Uint8Array> | null> {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) return null;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${apiKey}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
-    }),
-  });
-  if (!res.ok || !res.body) return null;
 
-  const reader = res.body.getReader();
+  return tryModelChain(GEMINI_MODELS, async (model) => {
+    const res = await fetch(geminiStreamUrl(model, apiKey), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: AI_MAX_TOKENS, temperature: AI_TEMPERATURE },
+      }),
+    });
+    if (!res.ok || !res.body) {
+      return { value: null, skipProvider: skipRemainingModels(res.status) };
+    }
+    return { value: geminiSseToTextStream(res.body), skipProvider: false };
+  });
+}
+
+function geminiSseToTextStream(
+  body: ReadableStream<Uint8Array>,
+): ReadableStream<Uint8Array> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
 
@@ -81,27 +107,40 @@ function processGeminiBuffer(
   }
 }
 
+async function tryOpenAICompatibleStream(
+  url: string,
+  apiKey: string,
+  models: readonly string[],
+  prompt: string,
+): Promise<ReadableStream<Uint8Array> | null> {
+  return tryModelChain(models, async (model) => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: AI_MAX_TOKENS,
+        temperature: AI_TEMPERATURE,
+        stream: true,
+      }),
+    });
+    if (!res.ok || !res.body) {
+      return { value: null, skipProvider: skipRemainingModels(res.status) };
+    }
+    return { value: parseOpenAISSE(res.body), skipProvider: false };
+  });
+}
+
 async function tryGroqStream(
   prompt: string,
 ): Promise<ReadableStream<Uint8Array> | null> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return null;
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "llama-3.1-8b-instant",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 1024,
-      temperature: 0.7,
-      stream: true,
-    }),
-  });
-  if (!res.ok || !res.body) return null;
-  return parseOpenAISSE(res.body);
+  return tryOpenAICompatibleStream(GROQ_CHAT_URL, apiKey, GROQ_MODELS, prompt);
 }
 
 async function tryOpenRouterStream(
@@ -109,22 +148,25 @@ async function tryOpenRouterStream(
 ): Promise<ReadableStream<Uint8Array> | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return null;
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "openrouter/free",
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: 1024,
-      temperature: 0.7,
-      stream: true,
-    }),
-  });
-  if (!res.ok || !res.body) return null;
-  return parseOpenAISSE(res.body);
+  return tryOpenAICompatibleStream(
+    OPENROUTER_CHAT_URL,
+    apiKey,
+    OPENROUTER_MODELS,
+    prompt,
+  );
+}
+
+async function tryHuggingFaceStream(
+  prompt: string,
+): Promise<ReadableStream<Uint8Array> | null> {
+  const apiKey = getHuggingFaceKey();
+  if (!apiKey) return null;
+  return tryOpenAICompatibleStream(
+    HUGGINGFACE_CHAT_URL,
+    apiKey,
+    HUGGINGFACE_MODELS,
+    prompt,
+  );
 }
 
 /** Transform upstream OpenAI-compatible SSE into a simple byte stream of decoded text deltas. */
@@ -171,7 +213,7 @@ function parseOpenAISSE(
 }
 
 /**
- * Generate streaming text using AI with fallback chain: Gemini → Groq → OpenRouter.
+ * Generate streaming text: Gemini → Groq → OpenRouter → Hugging Face.
  * Returns a ReadableStream of UTF-8 text chunks, or null if all providers fail.
  */
 export async function generateWithAIStream(
@@ -181,5 +223,7 @@ export async function generateWithAIStream(
   if (fromGemini) return fromGemini;
   const fromGroq = await tryGroqStream(prompt);
   if (fromGroq) return fromGroq;
-  return tryOpenRouterStream(prompt);
+  const fromOpenRouter = await tryOpenRouterStream(prompt);
+  if (fromOpenRouter) return fromOpenRouter;
+  return tryHuggingFaceStream(prompt);
 }

@@ -5,8 +5,9 @@
  *
  * Walkthrough:
  * - `initialData` from `app/page.tsx` (SSR) seeds first render; `useWeather` handles user searches and loading UI.
- * - On successful search, `onSuccess` updates context, persists city, and geocodes for forecast + air-quality API calls.
+ * - On successful search, `onSuccess` updates context, persists city, and sets lat/lon from `weather.coord` (geocode API only if coord is missing).
  * - AI blocks call `/api/ai/summary` and `/api/ai/farming-tips` (stream preferred). TTS posts to `/api/ai/tts`.
+ * - Panel errors (`forecastError`, `airError`, `summaryError`, `tipsError`, `ttsError`) replace silent spinner failures.
  * - Helpers: date/compass formatting, `groupForecastByDay`, `renderAiText` for **bold** / bullets in streamed markdown.
  */
 import { Card } from "@/Components/ui/card";
@@ -15,9 +16,10 @@ import { Skeleton } from "@/Components/ui/skeleton";
 import { useWeatherContext } from "@/context/WeatherContext";
 import { DEFAULT_CITY, WEATHER_GIFS, WEATHER_IMAGES } from "@/data/constants";
 import { useWeather } from "@/hooks/useWeather";
-import { geocodeCity } from "@/lib/openweather";
+import { msToKmh } from "@/lib/units";
 import type { AirPollutionResponse } from "@/types/air";
 import type { ForecastResponse } from "@/types/forecast";
+import type { GeoItem } from "@/types/geo";
 import type { WeatherApiSuccess } from "@/types/weather";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -56,6 +58,50 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 type HomePageProps = {
   initialData: WeatherApiSuccess | null;
 };
+
+/** Use OpenWeather `coord` when present; otherwise same-origin geocode (no browser API key). */
+function applyCoordinatesFromWeather(
+  data: WeatherApiSuccess,
+  city: string,
+  setCoordinates: (lat: number, lon: number) => void,
+): void {
+  const lat = data.coord?.lat;
+  const lon = data.coord?.lon;
+  if (
+    typeof lat === "number" &&
+    typeof lon === "number" &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lon)
+  ) {
+    setCoordinates(lat, lon);
+    return;
+  }
+  void fetch(`/api/geocode?city=${encodeURIComponent(city)}`)
+    .then((res) => (res.ok ? (res.json() as Promise<GeoItem>) : null))
+    .then((geo) => {
+      if (
+        geo &&
+        Number.isFinite(geo.lat) &&
+        Number.isFinite(geo.lon)
+      ) {
+        setCoordinates(geo.lat, geo.lon);
+      }
+    })
+    .catch(() => {
+      /* forecast/AQI stay empty if coords never resolve */
+    });
+}
+
+/** Read `{ error }` from a failed Route Handler; fallback if the body is empty or non-JSON. */
+async function readApiError(res: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await res.json()) as { error?: unknown };
+    if (typeof data.error === "string" && data.error.trim()) return data.error;
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
 
 /* ─── helpers ────────────────────────────────────────────── */
 
@@ -327,16 +373,21 @@ export function HomePage({ initialData }: HomePageProps) {
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryStreaming, setSummaryStreaming] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [tips, setTips] = useState<string | null>(null);
   const [tipsLoading, setTipsLoading] = useState(false);
   const [tipsStreaming, setTipsStreaming] = useState(false);
+  const [tipsError, setTipsError] = useState<string | null>(null);
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
+  const [forecastError, setForecastError] = useState<string | null>(null);
   const [air, setAir] = useState<AirPollutionResponse | null>(null);
   const [airLoading, setAirLoading] = useState(false);
+  const [airError, setAirError] = useState<string | null>(null);
   const [lastAiCityKey, setLastAiCityKey] = useState<string | null>(null);
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [ttsError, setTtsError] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const onSuccess = useCallback(
@@ -344,7 +395,7 @@ export function HomePage({ initialData }: HomePageProps) {
       setCity(city);
       setCurrentWeather(data);
       addSavedCity(city);
-      void geocodeCity(city).then((g) => g && setCoordinates(g.lat, g.lon));
+      applyCoordinatesFromWeather(data, city, setCoordinates);
     },
     [setCity, setCoordinates, setCurrentWeather, addSavedCity],
   );
@@ -357,17 +408,22 @@ export function HomePage({ initialData }: HomePageProps) {
     initialSync.current = true;
     setCurrentWeather(initialData);
     setCity(initialData.name);
-    void geocodeCity(initialData.name).then(
-      (g) => g && setCoordinates(g.lat, g.lon),
-    );
+    applyCoordinatesFromWeather(initialData, initialData.name, setCoordinates);
   }, [initialData, setCity, setCoordinates, setCurrentWeather]);
 
-  // Navbar (and direct links) set `?city=`; re-run search on client so loading state and errors work consistently.
+  // Navbar sets `?city=`. Skip a second OpenWeather hit when SSR already loaded that city.
+  // If SSR fell back to the default city, names differ → client search shows not-found.
   useEffect(() => {
-    const cityFromQuery = searchParams.get("city");
-    if (!cityFromQuery?.trim()) return;
-    void searchWeather(cityFromQuery.trim());
-  }, [searchParams, searchWeather]);
+    const cityFromQuery = searchParams.get("city")?.trim();
+    if (!cityFromQuery) return;
+    if (
+      initialData &&
+      cityFromQuery.toLowerCase() === initialData.name.trim().toLowerCase()
+    ) {
+      return;
+    }
+    void searchWeather(cityFromQuery);
+  }, [searchParams, searchWeather, initialData]);
 
   /* ── fetch callbacks (AI + geo APIs; streaming readers mirror route Content-Type) ── */
 
@@ -375,6 +431,7 @@ export function HomePage({ initialData }: HomePageProps) {
     if (state.status !== "ready") return;
     setSummaryLoading(true);
     setSummary(null);
+    setSummaryError(null);
     setSummaryStreaming(false);
     try {
       const res = await fetch("/api/ai/summary", {
@@ -385,13 +442,16 @@ export function HomePage({ initialData }: HomePageProps) {
           weather: {
             temp: state.data.main.temp,
             humidity: state.data.main.humidity,
-            wind: state.data.wind.speed,
+            wind: msToKmh(state.data.wind.speed),
             main: state.data.weather[0]?.main ?? "",
             description: state.data.weather[0]?.description ?? "",
           },
         }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setSummaryError(await readApiError(res, "Weather summary unavailable."));
+        return;
+      }
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("text/plain") && res.body) {
         setSummaryStreaming(true);
@@ -409,6 +469,8 @@ export function HomePage({ initialData }: HomePageProps) {
         const data = (await res.json()) as { text: string };
         setSummary(data.text);
       }
+    } catch {
+      setSummaryError("Weather summary unavailable.");
     } finally {
       setSummaryLoading(false);
       setSummaryStreaming(false);
@@ -419,6 +481,7 @@ export function HomePage({ initialData }: HomePageProps) {
     if (state.status !== "ready") return;
     setTipsLoading(true);
     setTips(null);
+    setTipsError(null);
     setTipsStreaming(false);
     try {
       const res = await fetch("/api/ai/farming-tips", {
@@ -429,7 +492,7 @@ export function HomePage({ initialData }: HomePageProps) {
           weather: {
             temp: state.data.main.temp,
             humidity: state.data.main.humidity,
-            wind: state.data.wind.speed,
+            wind: msToKmh(state.data.wind.speed),
             main: state.data.weather[0]?.main ?? "",
             description: state.data.weather[0]?.description ?? "",
             pressure: state.data.main.pressure,
@@ -463,7 +526,10 @@ export function HomePage({ initialData }: HomePageProps) {
             : null,
         }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setTipsError(await readApiError(res, "Farming tips unavailable."));
+        return;
+      }
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("text/plain") && res.body) {
         setTipsStreaming(true);
@@ -481,6 +547,8 @@ export function HomePage({ initialData }: HomePageProps) {
         const data = (await res.json()) as { text: string };
         setTips(data.text);
       }
+    } catch {
+      setTipsError("Farming tips unavailable.");
     } finally {
       setTipsLoading(false);
       setTipsStreaming(false);
@@ -497,13 +565,17 @@ export function HomePage({ initialData }: HomePageProps) {
     const text = [summary, tips].filter(Boolean).join("\n\n");
     if (!text) return;
     setTtsLoading(true);
+    setTtsError(null);
     try {
       const res = await fetch("/api/ai/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setTtsError(await readApiError(res, "Voice reader unavailable."));
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
@@ -515,9 +587,12 @@ export function HomePage({ initialData }: HomePageProps) {
       audio.onerror = () => {
         setTtsPlaying(false);
         URL.revokeObjectURL(url);
+        setTtsError("Voice reader unavailable.");
       };
       await audio.play();
       setTtsPlaying(true);
+    } catch {
+      setTtsError("Voice reader unavailable.");
     } finally {
       setTtsLoading(false);
     }
@@ -526,11 +601,17 @@ export function HomePage({ initialData }: HomePageProps) {
   const fetchForecast = useCallback(async () => {
     if (lat == null || lon == null) return;
     setForecastLoading(true);
+    setForecastError(null);
     try {
       const res = await fetch(`/api/forecast?lat=${lat}&lon=${lon}`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        setForecastError(await readApiError(res, "Forecast unavailable."));
+        return;
+      }
       const data = (await res.json()) as ForecastResponse;
       setForecast(data);
+    } catch {
+      setForecastError("Forecast unavailable.");
     } finally {
       setForecastLoading(false);
     }
@@ -539,11 +620,19 @@ export function HomePage({ initialData }: HomePageProps) {
   const fetchAir = useCallback(async () => {
     if (lat == null || lon == null) return;
     setAirLoading(true);
+    setAirError(null);
     try {
       const res = await fetch(`/api/air-quality?lat=${lat}&lon=${lon}`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        setAir(null);
+        setAirError(await readApiError(res, "Air quality unavailable."));
+        return;
+      }
       const data = (await res.json()) as AirPollutionResponse;
       setAir(data);
+    } catch {
+      setAir(null);
+      setAirError("Air quality unavailable.");
     } finally {
       setAirLoading(false);
     }
@@ -559,6 +648,9 @@ export function HomePage({ initialData }: HomePageProps) {
     if (state.status !== "ready") {
       setSummary(null);
       setTips(null);
+      setSummaryError(null);
+      setTipsError(null);
+      setTtsError(null);
       setLastAiCityKey(null);
       return;
     }
@@ -572,6 +664,9 @@ export function HomePage({ initialData }: HomePageProps) {
     if (lastAiCityKey !== nextCityKey) {
       setSummary(null);
       setTips(null);
+      setSummaryError(null);
+      setTipsError(null);
+      setTtsError(null);
       setLastAiCityKey(nextCityKey);
     }
   }, [state, lastAiCityKey]);
@@ -620,7 +715,7 @@ export function HomePage({ initialData }: HomePageProps) {
           </motion.div>
         ) : state.notFound ? (
           <Card className="p-6 text-center">
-            <p className="text-lg text-white">City not found.</p>
+            <p className="text-lg text-white">{state.message}</p>
             <div className="cta-shine-wrap mt-4 rounded-lg">
               <RippleButton
                 type="button"
@@ -831,7 +926,7 @@ export function HomePage({ initialData }: HomePageProps) {
                     Wind
                   </p>
                   <p className="mt-2 text-4xl font-bold text-white">
-                    {state.data.wind.speed}{" "}
+                    {msToKmh(state.data.wind.speed)}{" "}
                     <span className="text-lg font-normal text-white/90">
                       km/h
                     </span>
@@ -1031,6 +1126,21 @@ export function HomePage({ initialData }: HomePageProps) {
                     </div>
                   </div>
                 </div>
+                {summaryError && (
+                  <p className="mt-3 rounded-xl border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-white/90">
+                    {summaryError}
+                  </p>
+                )}
+                {tipsError && (
+                  <p className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-500/10 p-3 text-sm text-white/90">
+                    {tipsError}
+                  </p>
+                )}
+                {ttsError && (
+                  <p className="mt-3 rounded-xl border border-violet-300/20 bg-violet-500/10 p-3 text-sm text-white/90">
+                    {ttsError}
+                  </p>
+                )}
                 {!summary && !tips && (
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     <p className="inline-flex items-start gap-2 rounded-xl border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-white/90">
@@ -1116,6 +1226,8 @@ export function HomePage({ initialData }: HomePageProps) {
                         </div>
                       ))}
                     </div>
+                  ) : forecastError ? (
+                    <p className="mt-3 text-sm text-white">{forecastError}</p>
                   ) : (
                     <div className="mt-3 space-y-2">
                       {groupForecastByDay(forecast?.list ?? []).map((item) => {
@@ -1163,7 +1275,7 @@ export function HomePage({ initialData }: HomePageProps) {
                                   </span>
                                   <span className="inline-flex items-center gap-1">
                                     <Wind className="h-3.5 w-3.5" />
-                                    {item.wind.speed} km/h
+                                    {msToKmh(item.wind.speed)} km/h
                                   </span>
                                   <span className="inline-flex items-center gap-1 capitalize">
                                     <Cloud className="h-3.5 w-3.5" />
@@ -1269,6 +1381,8 @@ export function HomePage({ initialData }: HomePageProps) {
                         </div>
                       </div>
                     </>
+                  ) : airError ? (
+                    <p className="mt-3 text-sm text-white">{airError}</p>
                   ) : (
                     <p className="mt-3 text-sm text-white">
                       No air quality data available yet.

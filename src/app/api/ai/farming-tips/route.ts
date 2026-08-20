@@ -6,6 +6,8 @@
  */
 import { generateWithAI } from "@/lib/ai";
 import { generateWithAIStream } from "@/lib/ai-stream";
+import { enforceAiRateLimit } from "@/lib/ai-rate-limit";
+import { validateFarmingTipsBody } from "@/lib/ai-validate";
 import { NextRequest, NextResponse } from "next/server";
 
 type Body = {
@@ -110,11 +112,19 @@ function buildPrompt(body: Body): string {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = enforceAiRateLimit(request);
+  if (limited) return limited;
+
   let body: Body;
   try {
     body = (await request.json()) as Body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = validateFarmingTipsBody(body);
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
   const prompt = buildPrompt(body);

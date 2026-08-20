@@ -1,0 +1,39 @@
+{
+  "project": "weather-farming",
+  "cycle": "C1",
+  "standard": "Agile V",
+  "regulatory_context": "non-regulated",
+  "authority_matrix": {
+    "human_gate_1": "project owner",
+    "human_gate_2": "project owner"
+  },
+  "llm_providers": [
+    {
+      "name": "Google Gemini",
+      "models_in_code": ["gemini-1.5-flash", "gemini-2.0-flash"],
+      "env": "GOOGLE_GEMINI_API_KEY",
+      "approved_for": ["weather-summary", "farming-tips"],
+      "notes": "Non-stream uses 1.5-flash; stream uses 2.0-flash. Docs recommend 2.5-flash as of 2026-08-01."
+    },
+    {
+      "name": "Groq",
+      "models_in_code": ["llama-3.1-8b-instant"],
+      "env": "GROQ_API_KEY",
+      "approved_for": ["weather-summary", "farming-tips"],
+      "notes": "LLM_MODEL_SELECTION.md records shutdown 2026-08-16. Unverified in this session against live Groq API."
+    },
+    {
+      "name": "OpenRouter",
+      "models_in_code": ["openrouter/free"],
+      "env": "OPENROUTER_API_KEY",
+      "approved_for": ["weather-summary", "farming-tips"],
+      "notes": "Model id is likely invalid; OpenRouter free models normally use :free suffixes."
+    },
+    {
+      "name": "ElevenLabs",
+      "models_in_code": ["eleven_monolingual_v1"],
+      "env": "ELEVENLABS_API_KEY",
+      "approved_for": ["tts"]
+    }
+  ]
+}

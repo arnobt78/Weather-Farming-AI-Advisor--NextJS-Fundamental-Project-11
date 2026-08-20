@@ -4,7 +4,8 @@
  * Walkthrough:
  * - Next.js runs this on the server for each request (dynamic route when cookies/search vary).
  * - City resolution order: URL ?city= → cookie (last searched) → DEFAULT_CITY — so refresh keeps context.
- * - `fetchWeatherByCity` calls OpenWeather server-side via `lib/openweather` (API key in env, not exposed to browser).
+ * - `fetchWeatherByCity` runs only on the server (`lib/openweather` + `OPENWEATHER_API_KEY`).
+ * - Client search uses `GET /api/weather` so the key never enters the browser bundle.
  * - Fallback: if the chosen city fails but isn’t default, retry DEFAULT_CITY so the page still hydrates.
  * - `HomePage` is a Client Component: it receives `initialData` as props for first paint, then handles live search.
  */

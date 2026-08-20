@@ -4,9 +4,13 @@
  * ElevenLabs first; on failure uses Edge TTS and sets `X-TTS-Fallback: edge` for debugging.
  */
 import { textToSpeechEdge, textToSpeechElevenLabs } from "@/lib/tts";
+import { enforceAiRateLimit } from "@/lib/ai-rate-limit";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
+  const limited = enforceAiRateLimit(request);
+  if (limited) return limited;
+
   let body: { text?: string };
   try {
     body = (await request.json()) as { text?: string };
