@@ -69,5 +69,11 @@
 - Navbar empty search; HomePage city + Summary/Tips/TTS success/error (panel errors kept).
 - `useWeather` `onError` for client search failures.
 
+## 2026-08-20 — Saved cities SSR fix
+
+- SSR `/?city=` match calls `addSavedCity(initialData.name)` (was skipped).
+- Client `onSuccess` saves canonical `data.name`.
+- Case-insensitive dedupe in `WeatherContext.addSavedCity`.
+
 
 

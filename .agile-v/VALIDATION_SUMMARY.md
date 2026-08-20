@@ -12,5 +12,6 @@
 | VAL-0008 | AI Insights UX | 2026-08-20 | **PASS** | Farming 2048 tokens, tighter prompts, Loader2 + live stream panels; lint/typecheck/test/build PASS. |
 | VAL-0009 | Glass toasts | 2026-08-20 | **PASS** | ToastContext + glass Toaster; search + AI wired; lint/typecheck/test/build PASS. |
 | VAL-0010 | AI tokens + vercel | 2026-08-20 | **PASS** | summary 1024 / farming 4096; prompts tightened; `framework` removed from vercel.json; lint/typecheck/test/build PASS. |
+| VAL-0011 | Saved cities SSR | 2026-08-20 | **PASS** | SSR `?city=` saves canonical name; case-insensitive chips; lint/typecheck/test/build PASS. |
 
 **EvalGate:** n/a (Gate 2 not open).

@@ -424,7 +424,8 @@ export function HomePage({ initialData }: HomePageProps) {
     (data: WeatherApiSuccess, city: string) => {
       setCity(city);
       setCurrentWeather(data);
-      addSavedCity(city);
+      // Canonical OpenWeather name so SAVED chips match the dashboard title.
+      addSavedCity(data.name);
       applyCoordinatesFromWeather(data, city, setCoordinates);
       const key = `ok:${data.name}`;
       if (lastToastedCityKey.current !== key) {
@@ -478,7 +479,8 @@ export function HomePage({ initialData }: HomePageProps) {
       initialData &&
       cityFromQuery.toLowerCase() === initialData.name.trim().toLowerCase()
     ) {
-      // SSR already matched — toast once for this query city without a second fetch.
+      // SSR already matched — save + toast without a second OpenWeather fetch.
+      addSavedCity(initialData.name);
       const key = `ok:${initialData.name}`;
       if (lastToastedCityKey.current !== key) {
         lastToastedCityKey.current = key;
@@ -490,7 +492,7 @@ export function HomePage({ initialData }: HomePageProps) {
       return;
     }
     void searchWeather(cityFromQuery);
-  }, [searchParams, searchWeather, initialData, toastSuccess]);
+  }, [searchParams, searchWeather, initialData, toastSuccess, addSavedCity]);
 
   /* ── fetch callbacks (AI + geo APIs; streaming readers mirror route Content-Type) ── */
 

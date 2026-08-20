@@ -113,14 +113,16 @@ export function WeatherProvider({
     }
   }, []);
 
+  // Case-insensitive dedupe so "miami" / "Miami" collapse to one chip (newest casing wins).
   const addSavedCity = useCallback((c: string) => {
     const trimmed = c.trim();
     if (!trimmed) return;
+    const lower = trimmed.toLowerCase();
     setSavedCities((prev) => {
-      const next = [trimmed, ...prev.filter((x) => x !== trimmed)].slice(
-        0,
-        MAX_SAVED,
-      );
+      const next = [
+        trimmed,
+        ...prev.filter((x) => x.toLowerCase() !== lower),
+      ].slice(0, MAX_SAVED);
       try {
         if (typeof window !== "undefined") {
           localStorage.setItem(STORAGE_SAVED, JSON.stringify(next));
