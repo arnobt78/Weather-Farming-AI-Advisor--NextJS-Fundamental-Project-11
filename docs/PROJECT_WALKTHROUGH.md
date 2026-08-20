@@ -36,7 +36,7 @@ Scripts: `lint` · `typecheck` · `test` · `build` · `start`
 2. `page.tsx` city: `?city=` → cookie → Frankfurt → `fetchWeatherByCity` (300s cache).
 3. Client: context + `useWeather`; forecast/AQI by lat/lon; panel errors on fail.
 4. Glass toasts (`ToastContext` in `AppProvider`): city search + AI summary/tips/TTS (panel errors kept).
-5. Saved cities: successful `/?city=` (SSR or client) → `addSavedCity(canonical name)` → cookie + localStorage → Navbar chips (case-insensitive dedupe).
+5. Saved cities: successful `/?city=` (SSR or client) → `addSavedCity(canonical name)` → cookie + localStorage → Navbar chips (case-insensitive; glow bleed via `.saved-chips-scroll`).
 6. AI POST → IP limit → validate → Gemini→Groq→OpenRouter→HF (stream or JSON). Tokens: summary 1024 / farming 4096.
 7. Wind UI/AI: `msToKmh` (OpenWeather m/s → km/h).
 

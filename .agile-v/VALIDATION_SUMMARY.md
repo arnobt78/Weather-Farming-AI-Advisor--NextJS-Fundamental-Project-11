@@ -13,5 +13,7 @@
 | VAL-0009 | Glass toasts | 2026-08-20 | **PASS** | ToastContext + glass Toaster; search + AI wired; lint/typecheck/test/build PASS. |
 | VAL-0010 | AI tokens + vercel | 2026-08-20 | **PASS** | summary 1024 / farming 4096; prompts tightened; `framework` removed from vercel.json; lint/typecheck/test/build PASS. |
 | VAL-0011 | Saved cities SSR | 2026-08-20 | **PASS** | SSR `?city=` saves canonical name; case-insensitive chips; lint/typecheck/test/build PASS. |
+| VAL-0012 | SAVED chips UI | 2026-08-21 | **PASS** | Vertical center + shadow bleed; lint/typecheck/test/build PASS. |
+| VAL-0013 | SAVED polish v2 | 2026-08-21 | **PASS** | Glow bleed margins; gap-0.5; logo via fix; lint/typecheck/test/build PASS. |
 
 **EvalGate:** n/a (Gate 2 not open).

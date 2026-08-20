@@ -51,7 +51,7 @@ export function Navbar() {
 
   const savedCitiesRow = savedCities.length > 0 && (
     <div className="flex items-center gap-1.5">
-      <span className="shrink-0 text-[10px] font-medium uppercase leading-none tracking-wider text-white/90">
+      <span className="inline-flex h-[1.375rem] shrink-0 items-center text-[10px] font-medium uppercase leading-none tracking-wider text-white/90">
         Saved
       </span>
       {/* Scroll chips only — label stays fixed; glow via zero-Y shadow (no row padding). */}
@@ -99,13 +99,13 @@ export function Navbar() {
           className="group inline-flex shrink-0 items-center gap-2"
         >
           <CloudSun className="h-5 w-5 text-cyan-200 transition group-hover:scale-110 group-hover:rotate-12" />
-          <span className="bg-gradient-to-r from-rose-300 via-amber-200 via-emerald-200 to-sky-300 bg-clip-text font-display text-lg font-semibold text-transparent">
+          <span className="bg-gradient-to-r from-rose-300 via-amber-200 to-sky-300 bg-clip-text font-display text-lg font-semibold text-transparent">
             Weather Live
           </span>
         </Link>
 
         {/* Search Bar — Center (desktop) */}
-        <div className="hidden flex-1 max-w-lg flex-col items-center sm:flex">
+        <div className="hidden max-w-lg flex-1 flex-col items-stretch gap-0.5 sm:flex">
           <div className="flex w-full items-center gap-2">
             <div className="relative w-full">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/90" />
@@ -148,7 +148,7 @@ export function Navbar() {
             className={`absolute left-0 right-0 top-full flex flex-col gap-1 border-b border-white/20 bg-slate-900/80 px-4 py-3 backdrop-blur-2xl sm:static sm:flex-row sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none ${open ? "flex" : "hidden sm:flex"}`}
           >
             {/* Mobile search */}
-            <div className="mb-2 flex w-full flex-col gap-2 sm:hidden">
+            <div className="mb-2 flex w-full flex-col gap-0.5 sm:hidden">
               <div className="flex items-center gap-2">
                 <div className="relative w-full">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/90" />

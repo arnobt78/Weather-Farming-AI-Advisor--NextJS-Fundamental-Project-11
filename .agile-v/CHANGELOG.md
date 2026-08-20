@@ -75,5 +75,15 @@
 - Client `onSuccess` saves canonical `data.name`.
 - Case-insensitive dedupe in `WeatherContext.addSavedCity`.
 
+## 2026-08-21 — SAVED chips UI polish
+
+- Label + chips vertically centered (`leading-none`, split scroll).
+- `.saved-chips-scroll` + zero-Y Badge glow (no row padding).
+
+## 2026-08-21 — Navbar SAVED polish v2
+
+- Glow bleed: `padding-block` + negative `margin-block` on `.saved-chips-scroll`.
+- Tighter `gap-0.5` under search; label height-matched; logo single `via-amber-200`.
+
 
 

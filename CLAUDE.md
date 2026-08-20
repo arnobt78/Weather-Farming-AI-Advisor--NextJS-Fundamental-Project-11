@@ -5,7 +5,7 @@
 
 **Status:** C1 P0+P1 done (REQ-0016–0027, 0029). Skip REQ-0028 unless asked. HA-0001 done. HA-0003 ignored. Resume: `C1-HG1-20260820-WF` · Gate 1 Conditional.
 
-**Recent:** glass toasts · AI tokens 1024/4096 · vercel no `framework` · saved cities on SSR `/?city=` (canonical name, case-insensitive).
+**Recent:** glass toasts · AI tokens 1024/4096 · saved cities SSR · Navbar SAVED glow bleed + gap · AI timeouts = Vercel limit (leave as-is).
 
 ---
 

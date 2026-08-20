@@ -194,10 +194,12 @@ body {
   display: none;
 }
 
-/* Navbar SAVED chips: horizontal scroll without scrollbar; y-visible intent for glow bleed. */
+/* Navbar SAVED chips: horizontal scroll; block padding + negative margin so glow bleeds without growing layout. */
 .saved-chips-scroll {
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: hidden;
+  padding-block: 10px;
+  margin-block: -10px;
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
