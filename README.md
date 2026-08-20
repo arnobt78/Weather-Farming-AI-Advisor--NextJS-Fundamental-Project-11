@@ -1,4 +1,4 @@
-# AI-Powered Weather & Farming Advisory Dashboard - Next.js,React, TypeScript, OpenWeather API, Agro API, Unsplash API, TailwindCSS, Framer Motion Project
+# AI-Powered Weather & Farming Advisory Dashboard - Next.js, React, TypeScript, OpenWeather API, Agro API, Unsplash API, TailwindCSS, Framer Motion Project
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Next.js](https://img.shields.io/badge/Next.js-16.3-black?logo=next.js&logoColor=white)](https://nextjs.org/)

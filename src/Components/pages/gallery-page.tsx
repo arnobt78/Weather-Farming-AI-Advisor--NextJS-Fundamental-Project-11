@@ -28,9 +28,16 @@ export function GalleryPage() {
   const [photos, setPhotos] = useState<UnsplashPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [keywordForPage, setKeywordForPage] = useState(keyword);
   const [totalPages, setTotalPages] = useState(1);
   const [dialogPhoto, setDialogPhoto] = useState<UnsplashPhoto | null>(null);
   const galleryTopRef = useRef<HTMLDivElement>(null);
+
+  // Reset pagination when the weather keyword changes (adjust state during render).
+  if (keyword !== keywordForPage) {
+    setKeywordForPage(keyword);
+    setPage(1);
+  }
 
   const fetchPhotos = useCallback(async (kw: string, pg: number) => {
     setLoading(true);
@@ -52,11 +59,10 @@ export function GalleryPage() {
   }, []);
 
   useEffect(() => {
-    setPage(1);
-  }, [keyword]);
-
-  useEffect(() => {
-    void fetchPhotos(keyword, page);
+    const timer = window.setTimeout(() => {
+      void fetchPhotos(keyword, page);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [keyword, page, fetchPhotos]);
 
   const handlePageChange = useCallback((newPage: number) => {

@@ -50,4 +50,24 @@
 - `docs/PROJECT_WALKTHROUGH.md`; compact `CLAUDE.md`.
 - HA-0001 marked done; HA-0003 ignored; INT-0001 closed for P1.
 
+## 2026-08-20 — Safe within-major dep refresh
+
+- `npm update` + `lucide-react` ^0.577.0 (not Lucide 1).
+- Skipped: Tailwind 4, ESLint 10, TS 7, Framer 13, `@types/node` 26.
+- Lint fixes for eslint-plugin-react-hooks v7 (gallery/home fetch + clock purity).
+- lint · typecheck · test · build · audit 0 PASS.
+
+## 2026-08-20 — AI Insights stream / truncation fix
+
+- Earlier: summary 512 / farming 2048 + stream UX (Loader2, live panels).
+- Follow-up: summary **1024** / farming **4096** / fallback 2048; prompts ban fluff / “As an AI”.
+- `vercel.json`: removed `framework` (headers kept) — clears dashboard Overridden after deploy.
+
+## 2026-08-20 — Glass toast notifications
+
+- `ToastContext` + glass `toaster.tsx` in `AppProvider` (no sonner).
+- Navbar empty search; HomePage city + Summary/Tips/TTS success/error (panel errors kept).
+- `useWeather` `onError` for client search failures.
+
+
 

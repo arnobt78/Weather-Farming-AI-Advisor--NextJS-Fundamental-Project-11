@@ -5,6 +5,7 @@
  * - Gemini uses `streamGenerateContent` + SSE; we re-emit plain UTF-8 chunks.
  * - Groq / OpenRouter / Hugging Face use OpenAI-style SSE (`choices[0].delta.content`).
  * - Model IDs match `ai-providers.ts` (same chain as JSON `ai.ts`).
+ * - Optional `maxTokens` overrides the default `AI_MAX_TOKENS` (summary vs farming budgets).
  * - 429 skips remaining models on that provider.
  */
 
@@ -26,6 +27,7 @@ import {
 
 async function tryGeminiStream(
   prompt: string,
+  maxTokens: number,
 ): Promise<ReadableStream<Uint8Array> | null> {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) return null;
@@ -36,7 +38,10 @@ async function tryGeminiStream(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: AI_MAX_TOKENS, temperature: AI_TEMPERATURE },
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: AI_TEMPERATURE,
+        },
       }),
     });
     if (!res.ok || !res.body) {
@@ -112,6 +117,7 @@ async function tryOpenAICompatibleStream(
   apiKey: string,
   models: readonly string[],
   prompt: string,
+  maxTokens: number,
 ): Promise<ReadableStream<Uint8Array> | null> {
   return tryModelChain(models, async (model) => {
     const res = await fetch(url, {
@@ -123,7 +129,7 @@ async function tryOpenAICompatibleStream(
       body: JSON.stringify({
         model,
         messages: [{ role: "user", content: prompt }],
-        max_tokens: AI_MAX_TOKENS,
+        max_tokens: maxTokens,
         temperature: AI_TEMPERATURE,
         stream: true,
       }),
@@ -137,14 +143,22 @@ async function tryOpenAICompatibleStream(
 
 async function tryGroqStream(
   prompt: string,
+  maxTokens: number,
 ): Promise<ReadableStream<Uint8Array> | null> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return null;
-  return tryOpenAICompatibleStream(GROQ_CHAT_URL, apiKey, GROQ_MODELS, prompt);
+  return tryOpenAICompatibleStream(
+    GROQ_CHAT_URL,
+    apiKey,
+    GROQ_MODELS,
+    prompt,
+    maxTokens,
+  );
 }
 
 async function tryOpenRouterStream(
   prompt: string,
+  maxTokens: number,
 ): Promise<ReadableStream<Uint8Array> | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return null;
@@ -153,11 +167,13 @@ async function tryOpenRouterStream(
     apiKey,
     OPENROUTER_MODELS,
     prompt,
+    maxTokens,
   );
 }
 
 async function tryHuggingFaceStream(
   prompt: string,
+  maxTokens: number,
 ): Promise<ReadableStream<Uint8Array> | null> {
   const apiKey = getHuggingFaceKey();
   if (!apiKey) return null;
@@ -166,6 +182,7 @@ async function tryHuggingFaceStream(
     apiKey,
     HUGGINGFACE_MODELS,
     prompt,
+    maxTokens,
   );
 }
 
@@ -215,15 +232,17 @@ function parseOpenAISSE(
 /**
  * Generate streaming text: Gemini → Groq → OpenRouter → Hugging Face.
  * Returns a ReadableStream of UTF-8 text chunks, or null if all providers fail.
+ * @param maxTokens — route-specific budget (defaults to AI_MAX_TOKENS).
  */
 export async function generateWithAIStream(
   prompt: string,
+  maxTokens: number = AI_MAX_TOKENS,
 ): Promise<ReadableStream<Uint8Array> | null> {
-  const fromGemini = await tryGeminiStream(prompt);
+  const fromGemini = await tryGeminiStream(prompt, maxTokens);
   if (fromGemini) return fromGemini;
-  const fromGroq = await tryGroqStream(prompt);
+  const fromGroq = await tryGroqStream(prompt, maxTokens);
   if (fromGroq) return fromGroq;
-  const fromOpenRouter = await tryOpenRouterStream(prompt);
+  const fromOpenRouter = await tryOpenRouterStream(prompt, maxTokens);
   if (fromOpenRouter) return fromOpenRouter;
-  return tryHuggingFaceStream(prompt);
+  return tryHuggingFaceStream(prompt, maxTokens);
 }

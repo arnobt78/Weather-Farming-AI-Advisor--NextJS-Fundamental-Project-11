@@ -19,7 +19,7 @@
     "clsx": "^2.1.1",
     "edge-tts-universal": "^1.4.0",
     "framer-motion": "^12.43.0",
-    "lucide-react": "^0.542.0",
+    "lucide-react": "^0.577.0",
     "next": "^16.3.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

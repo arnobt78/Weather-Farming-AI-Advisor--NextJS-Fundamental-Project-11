@@ -23,7 +23,12 @@ export const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
 export const OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions";
 export const HUGGINGFACE_CHAT_URL = "https://router.huggingface.co/v1/chat/completions";
 
-export const AI_MAX_TOKENS = 1024;
+/** Default / fallback max output tokens when a route does not pass its own budget. */
+export const AI_MAX_TOKENS = 2048;
+/** Short weather summary — 2–3 sentences + outfit hint. */
+export const AI_MAX_TOKENS_SUMMARY = 1024;
+/** Farming tips — all required sections must finish; higher budget avoids mid-sentence cuts. */
+export const AI_MAX_TOKENS_FARMING = 4096;
 export const AI_TEMPERATURE = 0.7;
 
 export function geminiGenerateUrl(model: string, apiKey: string): string {

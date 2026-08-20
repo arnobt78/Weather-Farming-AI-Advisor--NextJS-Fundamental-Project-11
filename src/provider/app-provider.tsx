@@ -6,8 +6,10 @@
  * Walkthrough:
  * - Wraps the whole app inside `layout.tsx`.
  * - Disables browser scroll restoration and scrolls to top on mount so navigations feel like a SPA dashboard.
- * - Extend here for theme providers, analytics, etc., without touching every page.
+ * - Hosts ToastProvider + Toaster so search/AI notifications work from any client island.
  */
+import { Toaster } from "@/Components/ui/toaster";
+import { ToastProvider } from "@/context/ToastContext";
 import { useEffect, type ReactNode } from "react";
 
 type AppProviderProps = {
@@ -23,5 +25,10 @@ export function AppProvider({ children }: AppProviderProps) {
     window.scrollTo(0, 0);
   }, []);
 
-  return <>{children}</>;
+  return (
+    <ToastProvider>
+      {children}
+      <Toaster />
+    </ToastProvider>
+  );
 }

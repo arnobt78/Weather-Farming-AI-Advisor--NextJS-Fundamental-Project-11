@@ -8,11 +8,14 @@
  * - On successful search, `onSuccess` updates context, persists city, and sets lat/lon from `weather.coord` (geocode API only if coord is missing).
  * - AI blocks call `/api/ai/summary` and `/api/ai/farming-tips` (stream preferred). TTS posts to `/api/ai/tts`.
  * - Panel errors (`forecastError`, `airError`, `summaryError`, `tipsError`, `ttsError`) replace silent spinner failures.
+ * - Summary/Tips buttons show Loader2 while generating; streamed text grows in auto-height panels (no Framer height clip).
+ * - Glass toasts (ToastContext) for city search + AI success/error; panel error boxes stay as well.
  * - Helpers: date/compass formatting, `groupForecastByDay`, `renderAiText` for **bold** / bullets in streamed markdown.
  */
 import { Card } from "@/Components/ui/card";
 import { RippleButton } from "@/Components/ui/ripple-button";
 import { Skeleton } from "@/Components/ui/skeleton";
+import { useToast } from "@/context/ToastContext";
 import { useWeatherContext } from "@/context/WeatherContext";
 import { DEFAULT_CITY, WEATHER_GIFS, WEATHER_IMAGES } from "@/data/constants";
 import { useWeather } from "@/hooks/useWeather";
@@ -101,6 +104,27 @@ async function readApiError(res: Response, fallback: string): Promise<string> {
     /* ignore */
   }
   return fallback;
+}
+
+/**
+ * Consume a text/plain AI stream, calling onChunk with the full accumulated text after each delta.
+ * Used so Summary/Tips panels grow live instead of waiting for the full response.
+ */
+async function readPlainTextStream(
+  res: Response,
+  onChunk: (accumulated: string) => void,
+): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let accumulated = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    accumulated += decoder.decode(value, { stream: true });
+    onChunk(accumulated);
+  }
+  return accumulated;
 }
 
 /* ─── helpers ────────────────────────────────────────────── */
@@ -366,9 +390,14 @@ function DashboardSkeleton() {
 export function HomePage({ initialData }: HomePageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const toast = useToast();
+  const toastSuccess = toast.success;
+  const toastError = toast.error;
   const { setCity, setCoordinates, setCurrentWeather, lat, lon, addSavedCity } =
     useWeatherContext();
   const initialSync = useRef(false);
+  /** Dedupe city toasts so SSR remount / same ?city= does not spam. */
+  const lastToastedCityKey = useRef<string | null>(null);
 
   const [summary, setSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -388,6 +417,7 @@ export function HomePage({ initialData }: HomePageProps) {
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const [ttsError, setTtsError] = useState<string | null>(null);
+  const [clockMs, setClockMs] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const onSuccess = useCallback(
@@ -396,11 +426,39 @@ export function HomePage({ initialData }: HomePageProps) {
       setCurrentWeather(data);
       addSavedCity(city);
       applyCoordinatesFromWeather(data, city, setCoordinates);
+      const key = `ok:${data.name}`;
+      if (lastToastedCityKey.current !== key) {
+        lastToastedCityKey.current = key;
+        toastSuccess({
+          title: "City found",
+          description: `Showing weather for ${data.name}.`,
+        });
+      }
     },
-    [setCity, setCoordinates, setCurrentWeather, addSavedCity],
+    [setCity, setCoordinates, setCurrentWeather, addSavedCity, toastSuccess],
   );
 
-  const { state, searchWeather } = useWeather(initialData, { onSuccess });
+  const onError = useCallback(
+    (message: string, city: string) => {
+      const key = `err:${city.toLowerCase()}:${message}`;
+      if (lastToastedCityKey.current !== key) {
+        lastToastedCityKey.current = key;
+        toastError({
+          title:
+            message === "Weather unavailable."
+              ? "Weather unavailable"
+              : "City not found",
+          description: message,
+        });
+      }
+    },
+    [toastError],
+  );
+
+  const { state, searchWeather } = useWeather(initialData, {
+    onSuccess,
+    onError,
+  });
 
   // One-time: push SSR weather into context so Navbar/background see the same city as the server.
   useEffect(() => {
@@ -420,10 +478,19 @@ export function HomePage({ initialData }: HomePageProps) {
       initialData &&
       cityFromQuery.toLowerCase() === initialData.name.trim().toLowerCase()
     ) {
+      // SSR already matched — toast once for this query city without a second fetch.
+      const key = `ok:${initialData.name}`;
+      if (lastToastedCityKey.current !== key) {
+        lastToastedCityKey.current = key;
+        toastSuccess({
+          title: "City found",
+          description: `Showing weather for ${initialData.name}.`,
+        });
+      }
       return;
     }
     void searchWeather(cityFromQuery);
-  }, [searchParams, searchWeather, initialData]);
+  }, [searchParams, searchWeather, initialData, toastSuccess]);
 
   /* ── fetch callbacks (AI + geo APIs; streaming readers mirror route Content-Type) ── */
 
@@ -449,33 +516,40 @@ export function HomePage({ initialData }: HomePageProps) {
         }),
       });
       if (!res.ok) {
-        setSummaryError(await readApiError(res, "Weather summary unavailable."));
+        const msg = await readApiError(res, "Weather summary unavailable.");
+        setSummaryError(msg);
+        toastError({
+          title: "Weather summary unavailable",
+          description: msg,
+        });
         return;
       }
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("text/plain") && res.body) {
+        // Show empty panel + cursor immediately so growth is visible as chunks arrive.
+        setSummary("");
         setSummaryStreaming(true);
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let accumulated = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          accumulated += decoder.decode(value, { stream: true });
-          setSummary(accumulated);
-        }
+        await readPlainTextStream(res, setSummary);
         setSummaryStreaming(false);
       } else {
         const data = (await res.json()) as { text: string };
         setSummary(data.text);
       }
+      toastSuccess({
+        title: "Weather summary ready",
+        description: `AI briefing for ${state.data.name}.`,
+      });
     } catch {
       setSummaryError("Weather summary unavailable.");
+      toastError({
+        title: "Weather summary unavailable",
+        description: "Something went wrong. Try again.",
+      });
     } finally {
       setSummaryLoading(false);
       setSummaryStreaming(false);
     }
-  }, [state]);
+  }, [state, toastSuccess, toastError]);
 
   const fetchTips = useCallback(async () => {
     if (state.status !== "ready") return;
@@ -527,33 +601,39 @@ export function HomePage({ initialData }: HomePageProps) {
         }),
       });
       if (!res.ok) {
-        setTipsError(await readApiError(res, "Farming tips unavailable."));
+        const msg = await readApiError(res, "Farming tips unavailable.");
+        setTipsError(msg);
+        toastError({
+          title: "Farming tips unavailable",
+          description: msg,
+        });
         return;
       }
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("text/plain") && res.body) {
+        setTips("");
         setTipsStreaming(true);
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let accumulated = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          accumulated += decoder.decode(value, { stream: true });
-          setTips(accumulated);
-        }
+        await readPlainTextStream(res, setTips);
         setTipsStreaming(false);
       } else {
         const data = (await res.json()) as { text: string };
         setTips(data.text);
       }
+      toastSuccess({
+        title: "Farming tips ready",
+        description: `AI advice for ${state.data.name}.`,
+      });
     } catch {
       setTipsError("Farming tips unavailable.");
+      toastError({
+        title: "Farming tips unavailable",
+        description: "Something went wrong. Try again.",
+      });
     } finally {
       setTipsLoading(false);
       setTipsStreaming(false);
     }
-  }, [state, air, forecast]);
+  }, [state, air, forecast, toastSuccess, toastError]);
 
   const handleTTS = useCallback(async () => {
     if (ttsPlaying && audioRef.current) {
@@ -573,7 +653,12 @@ export function HomePage({ initialData }: HomePageProps) {
         body: JSON.stringify({ text }),
       });
       if (!res.ok) {
-        setTtsError(await readApiError(res, "Voice reader unavailable."));
+        const msg = await readApiError(res, "Voice reader unavailable.");
+        setTtsError(msg);
+        toastError({
+          title: "Voice reader unavailable",
+          description: msg,
+        });
         return;
       }
       const blob = await res.blob();
@@ -588,16 +673,27 @@ export function HomePage({ initialData }: HomePageProps) {
         setTtsPlaying(false);
         URL.revokeObjectURL(url);
         setTtsError("Voice reader unavailable.");
+        toastError({
+          title: "Voice reader unavailable",
+          description: "Could not play audio.",
+        });
       };
       await audio.play();
       setTtsPlaying(true);
+      toastSuccess({
+        title: "Playing AI voice",
+        description: "Listening to your weather and farming insights.",
+      });
     } catch {
       setTtsError("Voice reader unavailable.");
+      toastError({
+        title: "Voice reader unavailable",
+        description: "Something went wrong. Try again.",
+      });
     } finally {
       setTtsLoading(false);
     }
-  }, [summary, tips, ttsPlaying]);
-
+  }, [summary, tips, ttsPlaying, toastSuccess, toastError]);
   const fetchForecast = useCallback(async () => {
     if (lat == null || lon == null) return;
     setForecastLoading(true);
@@ -640,36 +736,38 @@ export function HomePage({ initialData }: HomePageProps) {
 
   useEffect(() => {
     if (state.status !== "ready" || lat == null || lon == null) return;
-    void fetchForecast();
-    void fetchAir();
+    const timer = window.setTimeout(() => {
+      void fetchForecast();
+      void fetchAir();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [state.status, lat, lon, fetchForecast, fetchAir]);
 
   useEffect(() => {
-    if (state.status !== "ready") {
+    const tick = () => setClockMs(Date.now());
+    const timer = window.setTimeout(tick, 0);
+    const interval = window.setInterval(tick, 30_000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const cityKeyForAi =
+    state.status === "ready"
+      ? `${state.data.name}|${state.data.sys?.country ?? ""}`
+      : null;
+  // Clear AI panels when leaving ready or switching city (adjust during render).
+  if (cityKeyForAi !== lastAiCityKey) {
+    if (lastAiCityKey != null) {
       setSummary(null);
       setTips(null);
       setSummaryError(null);
       setTipsError(null);
       setTtsError(null);
-      setLastAiCityKey(null);
-      return;
     }
-
-    const nextCityKey = `${state.data.name}|${state.data.sys?.country ?? ""}`;
-    if (lastAiCityKey == null) {
-      setLastAiCityKey(nextCityKey);
-      return;
-    }
-
-    if (lastAiCityKey !== nextCityKey) {
-      setSummary(null);
-      setTips(null);
-      setSummaryError(null);
-      setTipsError(null);
-      setTtsError(null);
-      setLastAiCityKey(nextCityKey);
-    }
-  }, [state, lastAiCityKey]);
+    setLastAiCityKey(cityKeyForAi);
+  }
 
   /* ── derived UI state (icons, local clock from OpenWeather timezone offset) ── */
 
@@ -687,12 +785,14 @@ export function HomePage({ initialData }: HomePageProps) {
     : weatherImage;
   const weatherGif = WEATHER_GIFS[weatherKind] ?? WEATHER_GIFS.Clear;
 
-  const localNow = useMemo(() => {
-    if (state.status !== "ready") return new Date();
-    return new Date(Date.now() + state.data.timezone * 1000);
-  }, [state]);
-  const localDate = useMemo(() => formatDate(localNow), [localNow]);
-  const localTime = useMemo(() => formatTime(localNow), [localNow]);
+  const localNow =
+    clockMs == null
+      ? null
+      : state.status === "ready"
+        ? new Date(clockMs + state.data.timezone * 1000)
+        : new Date(clockMs);
+  const localDate = localNow ? formatDate(localNow) : "—";
+  const localTime = localNow ? formatTime(localNow) : "—";
 
   const aqiData = useMemo(() => {
     const aqi = air?.list[0]?.main.aqi;
@@ -1078,7 +1178,11 @@ export function HomePage({ initialData }: HomePageProps) {
                         disabled={summaryLoading}
                         className="cta-shine-button rounded-lg border border-sky-300/50 bg-gradient-to-r from-sky-500/35 via-sky-500/20 to-sky-500/10 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(2,132,199,0.3)] backdrop-blur-sm transition hover:border-sky-200/60 hover:from-sky-500/45 hover:via-sky-500/25 hover:to-sky-500/15"
                       >
-                        <CloudCog className="h-4 w-4 shrink-0" />
+                        {summaryLoading ? (
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                        ) : (
+                          <CloudCog className="h-4 w-4 shrink-0" />
+                        )}
                         <span className="whitespace-nowrap">
                           {summaryLoading
                             ? "Generating Summary..."
@@ -1093,7 +1197,11 @@ export function HomePage({ initialData }: HomePageProps) {
                         disabled={tipsLoading}
                         className="cta-shine-button rounded-lg border border-emerald-300/50 bg-gradient-to-r from-emerald-500/35 via-emerald-500/20 to-emerald-500/10 px-4 py-2 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(16,185,129,0.28)] backdrop-blur-sm transition hover:border-emerald-200/60 hover:from-emerald-500/45 hover:via-emerald-500/25 hover:to-emerald-500/15"
                       >
-                        <Leaf className="h-4 w-4 shrink-0" />
+                        {tipsLoading ? (
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                        ) : (
+                          <Leaf className="h-4 w-4 shrink-0" />
+                        )}
                         <span className="whitespace-nowrap">
                           {tipsLoading
                             ? "Generating Tips..."
@@ -1141,7 +1249,7 @@ export function HomePage({ initialData }: HomePageProps) {
                     {ttsError}
                   </p>
                 )}
-                {!summary && !tips && (
+                {!summary && !tips && !summaryLoading && !tipsLoading && (
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     <p className="inline-flex items-start gap-2 rounded-xl border border-sky-300/20 bg-sky-500/10 p-3 text-sm text-white/90">
                       <CloudCog className="mt-0.5 h-4 w-4 shrink-0 text-sky-200" />
@@ -1170,29 +1278,38 @@ export function HomePage({ initialData }: HomePageProps) {
                   </div>
                 )}
                 <AnimatePresence>
-                  {summary && (
+                  {summary !== null && (
                     <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                     >
+                      {/* Natural height — no height:0/overflow clip so streamed text can grow. */}
                       <div className="mt-3 rounded-xl border border-sky-300/20 bg-sky-500/10 p-4 text-sm leading-relaxed text-white/90">
-                        {renderAiText(summary, summaryStreaming)}
+                        {summary
+                          ? renderAiText(summary, summaryStreaming)
+                          : summaryStreaming
+                            ? renderAiText("", true)
+                            : null}
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
                 <AnimatePresence>
-                  {tips && (
+                  {tips !== null && (
                     <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
-                      className="overflow-hidden"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
                     >
                       <div className="mt-3 rounded-xl border border-emerald-300/20 bg-emerald-500/10 p-4 text-sm leading-relaxed text-white/90">
-                        {renderAiText(tips, tipsStreaming)}
+                        {tips
+                          ? renderAiText(tips, tipsStreaming)
+                          : tipsStreaming
+                            ? renderAiText("", true)
+                            : null}
                       </div>
                     </motion.div>
                   )}

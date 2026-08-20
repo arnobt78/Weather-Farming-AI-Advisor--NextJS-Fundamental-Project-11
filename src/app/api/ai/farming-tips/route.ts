@@ -1,13 +1,15 @@
 /**
- * POST /api/ai/farming-tips — long-form markdown farming advice from full dashboard context
+ * POST /api/ai/farming-tips — compact markdown farming advice from dashboard context
  *
- * Body may include weather, air quality, forecast slice, geo — `buildPrompt` assembles the system-style instructions.
+ * Body may include weather, air quality, forecast slice, geo — `buildPrompt` assembles instructions.
+ * Uses AI_MAX_TOKENS_FARMING so all required sections can finish (avoids mid-sentence cuts).
  * Same streaming-then-JSON fallback pattern as summary.
  */
 import { generateWithAI } from "@/lib/ai";
 import { generateWithAIStream } from "@/lib/ai-stream";
 import { enforceAiRateLimit } from "@/lib/ai-rate-limit";
 import { validateFarmingTipsBody } from "@/lib/ai-validate";
+import { AI_MAX_TOKENS_FARMING } from "@/lib/ai-providers";
 import { NextRequest, NextResponse } from "next/server";
 
 type Body = {
@@ -66,19 +68,30 @@ const AQI_LABELS: Record<number, string> = {
   5: "Very Poor",
 };
 
-/** Concatenate structured facts + the final “act as advisor” instruction block. */
+/** Shared headers so Vercel/proxies flush chunks instead of buffering the full body. */
+const STREAM_HEADERS = {
+  "Content-Type": "text/plain; charset=utf-8",
+  "Cache-Control": "no-cache",
+  "Transfer-Encoding": "chunked",
+  "X-Accel-Buffering": "no",
+} as const;
+
+/**
+ * Build a tight farming prompt: facts + required section headers.
+ * Bans long greetings; requires every section to finish (no mid-sentence stop).
+ */
 function buildPrompt(body: Body): string {
   const { city, weather, airQuality, forecast, geo } = body;
   const parts: string[] = [];
 
   parts.push(
-    "You are an expert farming, gardening, and agricultural advisor. Provide detailed, practical, and actionable advice.",
+    "You are a farming/gardening advisor. Output ONLY the seven headed sections below. No greeting, no 'Dear Farmer', no apology, no 'As an AI', no closing essay.",
   );
 
   if (geo?.lat != null) {
     const season = getSeason(geo.lat);
     parts.push(
-      `Location: ${city}${geo.country ? `, ${geo.country}` : ""} (${geo.lat?.toFixed(2)}°, ${geo.lon?.toFixed(2)}°). Current season: ${season}.`,
+      `Location: ${city}${geo.country ? `, ${geo.country}` : ""} (${geo.lat.toFixed(2)}°, ${geo.lon?.toFixed(2) ?? "?"}°). Season: ${season}.`,
     );
   } else {
     parts.push(`Location: ${city}.`);
@@ -86,13 +99,13 @@ function buildPrompt(body: Body): string {
 
   if (weather) {
     parts.push(
-      `Current weather: ${weather.main} (${weather.description}), temperature ${weather.temp}°C, humidity ${weather.humidity}%, wind ${weather.wind} km/h${weather.pressure ? `, pressure ${weather.pressure} hPa` : ""}${weather.visibility != null ? `, visibility ${(weather.visibility / 1000).toFixed(1)} km` : ""}.`,
+      `Weather: ${weather.main} (${weather.description}), ${weather.temp}°C, humidity ${weather.humidity}%, wind ${weather.wind} km/h${weather.pressure ? `, pressure ${weather.pressure} hPa` : ""}${weather.visibility != null ? `, visibility ${(weather.visibility / 1000).toFixed(1)} km` : ""}.`,
     );
   }
 
   if (airQuality) {
     parts.push(
-      `Air quality: AQI ${airQuality.aqi} (${AQI_LABELS[airQuality.aqi] ?? "Unknown"}), PM2.5: ${airQuality.pm2_5.toFixed(1)}, PM10: ${airQuality.pm10.toFixed(1)}, O₃: ${airQuality.o3.toFixed(1)}, NO₂: ${airQuality.no2.toFixed(1)} µg/m³.`,
+      `Air quality: AQI ${airQuality.aqi} (${AQI_LABELS[airQuality.aqi] ?? "Unknown"}), PM2.5 ${airQuality.pm2_5.toFixed(1)}, PM10 ${airQuality.pm10.toFixed(1)}, O₃ ${airQuality.o3.toFixed(1)}, NO₂ ${airQuality.no2.toFixed(1)} µg/m³.`,
     );
   }
 
@@ -105,7 +118,12 @@ function buildPrompt(body: Body): string {
   }
 
   parts.push(
-    "Based on ALL the above data, provide 5 to 7 detailed farming and gardening tips organized with these sections: **Watering**, **Planting**, **Soil Care**, **Pest Control**, **Protection**, **Harvest Tips**, **Air Quality Advisory**. Use markdown bold for section headers. Be specific to the current weather conditions, season, and air quality. Include crop suggestions suitable for the temperature and humidity range.",
+    [
+      "Write ALL of these sections with **Bold** headers and 1–3 short bullets each:",
+      "**Watering**, **Planting**, **Soil Care**, **Pest Control**, **Protection**, **Harvest Tips**, **Air Quality Advisory**.",
+      "Tie tips to the weather/season/AQI above. Name 1–2 suitable crops for the temperature/humidity.",
+      "CRITICAL: Finish every section completely. Never stop mid-sentence. Prefer short bullets so all seven headers complete. No fluff before or after the sections.",
+    ].join(" "),
   );
 
   return parts.join("\n\n");
@@ -129,19 +147,15 @@ export async function POST(request: NextRequest) {
 
   const prompt = buildPrompt(body);
 
-  const stream = await generateWithAIStream(prompt);
+  const stream = await generateWithAIStream(prompt, AI_MAX_TOKENS_FARMING);
   if (stream) {
     return new Response(stream, {
       status: 200,
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-cache",
-        "Transfer-Encoding": "chunked",
-      },
+      headers: STREAM_HEADERS,
     });
   }
 
-  const text = await generateWithAI(prompt);
+  const text = await generateWithAI(prompt, AI_MAX_TOKENS_FARMING);
   if (!text) {
     return NextResponse.json(
       {

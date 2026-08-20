@@ -12,6 +12,7 @@ import { useState } from "react";
 import { RippleButton } from "@/Components/ui/ripple-button";
 import { Badge } from "@/Components/ui/badge";
 import { useWeatherContext } from "@/context/WeatherContext";
+import { useToast } from "@/context/ToastContext";
 import { CloudSun, MapPinCheck, Menu, Search, X } from "lucide-react";
 import { Input } from "@/Components/ui/input";
 import { AnimatePresence, motion } from "framer-motion";
@@ -27,10 +28,17 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const { savedCities, removeSavedCity } = useWeatherContext();
+  const { error: toastError } = useToast();
 
   const submitSearch = (): void => {
     const city = query.trim();
-    if (!city) return;
+    if (!city) {
+      toastError({
+        title: "Enter a city",
+        description: "Type a location to search.",
+      });
+      return;
+    }
     router.push(`/?city=${encodeURIComponent(city)}`);
     setQuery("");
     setOpen(false);

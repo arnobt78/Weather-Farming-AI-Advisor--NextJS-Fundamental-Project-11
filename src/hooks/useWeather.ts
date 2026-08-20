@@ -16,6 +16,7 @@ import { useCallback, useState } from "react";
 
 export type UseWeatherOptions = {
   onSuccess?: (data: WeatherApiSuccess, city: string) => void;
+  onError?: (message: string, city: string) => void;
 };
 
 /** Same-origin proxy — never call api.openweathermap.org from the browser. */
@@ -37,6 +38,7 @@ export function useWeather(
   options?: UseWeatherOptions,
 ) {
   const onSuccess = options?.onSuccess;
+  const onError = options?.onError;
 
   const [state, setState] = useState<WeatherState>(
     initialData
@@ -60,12 +62,13 @@ export function useWeather(
         const message =
           city === DEFAULT_CITY ? "Weather unavailable." : "City not found.";
         setState({ status: "error", data: null, notFound: true, message });
+        onError?.(message, city);
         return;
       }
       setState({ status: "ready", data, notFound: false });
       onSuccess?.(data, city);
     },
-    [onSuccess],
+    [onSuccess, onError],
   );
 
   return {

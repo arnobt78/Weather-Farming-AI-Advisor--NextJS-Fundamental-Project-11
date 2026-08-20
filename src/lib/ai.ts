@@ -4,6 +4,7 @@
  * Walkthrough:
  * - `generateWithAI` walks Gemini → Groq → OpenRouter → Hugging Face (skip unconfigured).
  * - Model IDs live in `ai-providers.ts` (same list as streaming).
+ * - Optional `maxTokens` overrides the default `AI_MAX_TOKENS` (summary vs farming budgets).
  * - Missing key / HTTP error / empty text → next model; 429 → next provider.
  */
 
@@ -23,7 +24,10 @@ import {
   tryModelChain,
 } from "@/lib/ai-providers";
 
-async function tryGemini(prompt: string): Promise<string | null> {
+async function tryGemini(
+  prompt: string,
+  maxTokens: number,
+): Promise<string | null> {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) return null;
 
@@ -33,7 +37,10 @@ async function tryGemini(prompt: string): Promise<string | null> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: AI_MAX_TOKENS, temperature: AI_TEMPERATURE },
+        generationConfig: {
+          maxOutputTokens: maxTokens,
+          temperature: AI_TEMPERATURE,
+        },
       }),
     });
     if (!res.ok) {
@@ -57,6 +64,7 @@ async function tryOpenAICompatible(
   apiKey: string,
   models: readonly string[],
   prompt: string,
+  maxTokens: number,
 ): Promise<string | null> {
   return tryModelChain(models, async (model) => {
     const res = await fetch(url, {
@@ -68,7 +76,7 @@ async function tryOpenAICompatible(
       body: JSON.stringify({
         model,
         messages: [{ role: "user", content: prompt }],
-        max_tokens: AI_MAX_TOKENS,
+        max_tokens: maxTokens,
         temperature: AI_TEMPERATURE,
       }),
     });
@@ -82,33 +90,64 @@ async function tryOpenAICompatible(
   });
 }
 
-async function tryGroq(prompt: string): Promise<string | null> {
+async function tryGroq(
+  prompt: string,
+  maxTokens: number,
+): Promise<string | null> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return null;
-  return tryOpenAICompatible(GROQ_CHAT_URL, apiKey, GROQ_MODELS, prompt);
+  return tryOpenAICompatible(
+    GROQ_CHAT_URL,
+    apiKey,
+    GROQ_MODELS,
+    prompt,
+    maxTokens,
+  );
 }
 
-async function tryOpenRouter(prompt: string): Promise<string | null> {
+async function tryOpenRouter(
+  prompt: string,
+  maxTokens: number,
+): Promise<string | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return null;
-  return tryOpenAICompatible(OPENROUTER_CHAT_URL, apiKey, OPENROUTER_MODELS, prompt);
+  return tryOpenAICompatible(
+    OPENROUTER_CHAT_URL,
+    apiKey,
+    OPENROUTER_MODELS,
+    prompt,
+    maxTokens,
+  );
 }
 
-async function tryHuggingFace(prompt: string): Promise<string | null> {
+async function tryHuggingFace(
+  prompt: string,
+  maxTokens: number,
+): Promise<string | null> {
   const apiKey = getHuggingFaceKey();
   if (!apiKey) return null;
-  return tryOpenAICompatible(HUGGINGFACE_CHAT_URL, apiKey, HUGGINGFACE_MODELS, prompt);
+  return tryOpenAICompatible(
+    HUGGINGFACE_CHAT_URL,
+    apiKey,
+    HUGGINGFACE_MODELS,
+    prompt,
+    maxTokens,
+  );
 }
 
 /**
  * Generate text using AI: Gemini → Groq → OpenRouter → Hugging Face.
+ * @param maxTokens — route-specific budget (defaults to AI_MAX_TOKENS).
  */
-export async function generateWithAI(prompt: string): Promise<string | null> {
-  const fromGemini = await tryGemini(prompt);
+export async function generateWithAI(
+  prompt: string,
+  maxTokens: number = AI_MAX_TOKENS,
+): Promise<string | null> {
+  const fromGemini = await tryGemini(prompt, maxTokens);
   if (fromGemini) return fromGemini;
-  const fromGroq = await tryGroq(prompt);
+  const fromGroq = await tryGroq(prompt, maxTokens);
   if (fromGroq) return fromGroq;
-  const fromOpenRouter = await tryOpenRouter(prompt);
+  const fromOpenRouter = await tryOpenRouter(prompt, maxTokens);
   if (fromOpenRouter) return fromOpenRouter;
-  return tryHuggingFace(prompt);
+  return tryHuggingFace(prompt, maxTokens);
 }
