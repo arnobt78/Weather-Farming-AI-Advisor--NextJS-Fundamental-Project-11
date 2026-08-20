@@ -193,3 +193,14 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Navbar SAVED chips: horizontal scroll without scrollbar; y-visible intent for glow bleed. */
+.saved-chips-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.saved-chips-scroll::-webkit-scrollbar {
+  display: none;
+}

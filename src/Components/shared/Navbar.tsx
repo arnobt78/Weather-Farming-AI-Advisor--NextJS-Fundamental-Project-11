@@ -50,39 +50,43 @@ export function Navbar() {
   };
 
   const savedCitiesRow = savedCities.length > 0 && (
-    <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1">
-      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-white/90">
+    <div className="flex items-center gap-1.5">
+      <span className="shrink-0 text-[10px] font-medium uppercase leading-none tracking-wider text-white/90">
         Saved
       </span>
-      <AnimatePresence mode="popLayout">
-        {savedCities.map((city) => (
-          <motion.div
-            key={city}
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.2 }}
-          >
-            <Badge className="gap-1 py-0.5 px-2 text-[11px]">
-              <button
-                type="button"
-                onClick={() => navigateToCity(city)}
-                className="text-white hover:text-sky-200 transition"
-              >
-                {city}
-              </button>
-              <button
-                type="button"
-                onClick={() => removeSavedCity(city)}
-                aria-label={`Remove ${city}`}
-                className="text-white hover:text-white transition"
-              >
-                <X className="h-2.5 w-2.5" />
-              </button>
-            </Badge>
-          </motion.div>
-        ))}
-      </AnimatePresence>
+      {/* Scroll chips only — label stays fixed; glow via zero-Y shadow (no row padding). */}
+      <div className="saved-chips-scroll flex min-w-0 flex-1 items-center gap-1.5">
+        <AnimatePresence mode="popLayout">
+          {savedCities.map((city) => (
+            <motion.div
+              key={city}
+              className="inline-flex items-center"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Badge className="gap-1 px-2 py-0.5 text-[11px] shadow-[0_0_18px_rgba(2,132,199,0.35)]">
+                <button
+                  type="button"
+                  onClick={() => navigateToCity(city)}
+                  className="text-white transition hover:text-sky-200"
+                >
+                  {city}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeSavedCity(city)}
+                  aria-label={`Remove ${city}`}
+                  className="text-white transition hover:text-white"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </Badge>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </div>
   );
 
